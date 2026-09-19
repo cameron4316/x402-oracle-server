@@ -1,0 +1,28 @@
+{
+  "name": "x402-oracle-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "x402 reliability oracle for Algorand — pluggable check architecture (reliability now, compliance later).",
+  "scripts": {
+    "monitor": "tsx src/monitor.ts",
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@x402-avm/extensions": "^2.6.1",
+    "@x402/avm": "^2.26.0",
+    "@x402/core": "^2.26.0",
+    "@x402/hono": "^2.26.0",
+    "dotenv": "^17.4.2",
+    "hono": "^4.13.8"
+  }
+}

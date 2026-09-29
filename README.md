@@ -1,17 +1,69 @@
-# x402 reliability oracle (Algorand)
+# Hosannaith
 
-A paid x402 endpoint that scores the **reliability** of other x402 endpoints — uptime, correct
-`402` behaviour, and latency — from continuous independent monitoring. Built on the official
-Algorand x402 tutorial (Hono + `@x402/*` + GoPlausible facilitator).
+**A pay-per-call x402 reliability oracle — live on Algorand Mainnet.**
 
-The architecture is deliberately **pluggable**: every paid product is a `Check` (see
-`src/checks/types.ts`). Reliability ships now; a **compliance/attestation** product later is a new
-`Check` + one route entry — no rewrite of the payment plumbing.
+🔗 **Live app:** [hosannaith.com](https://hosannaith.com) · **API:** `api.hosannaith.com` ·
+**Repo:** [github.com/cameron4316/x402-oracle-server](https://github.com/cameron4316/x402-oracle-server)
 
-## What's the "can't-backfill" part?
-The **monitor** (`pnpm monitor`) records one observation per target per interval, append-only, to
-`data/observations.jsonl`. That history compounds and cannot be reconstructed later — so start the
-monitor as early as possible and keep it running.
+## The problem
+
+As x402 turns APIs into pay-per-request services, agents increasingly pay endpoints they didn't
+build — with no way to know if an endpoint is actually reliable before sending real USDC. Dead or
+misbehaving endpoints silently waste money and break automated flows.
+
+## What it does
+
+Hosannaith is itself an x402 endpoint. It independently and continuously monitors other x402
+endpoints and sells a verified reliability score on demand: uptime, correct `402` behaviour, and
+latency percentiles, backed by real accumulated history — with every response flagging its
+confidence (`"history"` for a stood-behind score, `"one-shot"` for a target queried for the first
+time). It's x402 monitoring x402.
+
+```
+GET https://api.hosannaith.com/reliability?target=<x402-endpoint-url>
+```
+
+Unpaid requests get `402 Payment Required` with payment instructions; paid requests settle in
+USDC on Algorand via the GoPlausible facilitator and return JSON like:
+
+> **Verifiable on-chain:** first mainnet settlement —
+> [`3F2ATV3NCRVOI45IEL6OUKAWED3NQX246WJADESJB5CFR6LIXGCQ`](https://allo.info/tx/3F2ATV3NCRVOI45IEL6OUKAWED3NQX246WJADESJB5CFR6LIXGCQ)
+
+```json
+{
+  "target": "https://x402.example.com/api",
+  "status": "pass",
+  "score": 98.7,
+  "detail": {
+    "observations": 1439,
+    "windowHours": 24,
+    "uptimePct": 100,
+    "correct402Pct": 100,
+    "p50LatencyMs": 88,
+    "p95LatencyMs": 127,
+    "confidence": "history"
+  }
+}
+```
+
+## Architecture and vision
+
+The architecture is deliberately **pluggable**: every paid product implements the `Check`
+contract (see `src/checks/types.ts`). Reliability ships first; a **compliance/attestation**
+product for tokenization — the trust layer institutions need to bring real-world assets on-chain —
+is planned as a second `Check` + one route entry, with no rewrite of the payment plumbing.
+
+The **monitor** (`pnpm monitor`, run continuously on the production droplet) records one
+observation per target per interval, append-only, to `data/observations.jsonl`. That history
+compounds and cannot be reconstructed later — every score above is backed by real, continuous
+observation, not a synthetic estimate.
+
+---
+
+## For developers
+
+Everything below is setup/reference for running Hosannaith locally (defaults to testnet) or
+understanding the codebase — not required to use the live API above.
 
 ---
 
@@ -70,18 +122,32 @@ data/
   observations.jsonl    Append-only history (git-ignored; compounding)
 ```
 
-## Before you go live on MAINNET (build step 6)
-1. In `src/config.ts`, import the mainnet network id from `@x402/avm`
-   (e.g. `ALGORAND_MAINNET_CAIP2`) and assign it to `MAINNET_CAIP2`. (Mainnet USDC ASA `31566704`
-   is already set.) We didn't hardcode the mainnet id to avoid shipping a wrong genesis hash.
-2. Set `NETWORK=mainnet` and `AVM_ADDRESS` to your **fixed** competition payTo (opted in to USDC).
-3. Confirm the `tag` placement in `routes.config.ts` against the competition blog
-   ("add a field named 'tag' to your extra field").
-4. Deploy publicly over HTTPS (your Cloudflare domain) — Bazaar discovery needs a real host, not localhost.
-5. Settle one real mainnet payment end-to-end and confirm it appears on the leaderboard + Bazaar.
+## Mainnet is live — the CAIP-2 override, explained accurately
 
-## Notes / to confirm
-- Package **versions**: `pnpm add` resolves current releases (repo tracks x402 protocol `2.11.0`).
-  After a successful install, consider pinning with what `pnpm ls` reports.
-- This scaffold was written against the official tutorial's imports; run `pnpm typecheck` after
-  install to catch any API drift in your installed versions.
+`src/config.ts`'s `FACILITATOR_TESTNET_CAIP2` and `MAINNET_CAIP2` are **hardcoded, not imported
+from `@x402/avm`** — and that's deliberate, not an oversight. Here's the real story:
+
+`@x402/avm`'s `ALGORAND_TESTNET_CAIP2` / `ALGORAND_MAINNET_CAIP2` exports are the **spec-correct**,
+truncated CAIP-2 form (per the Algorand CAIP-2 namespace profile; fixed upstream in
+`x402-foundation/x402` issue #2904 / PR #2931). The package is not the problem. The live
+GoPlausible facilitator (`facilitator.goplausible.xyz`) runs `GoPlausible/x402-avm`, a fork
+hundreds of commits behind upstream that predates that fix — so its `/supported` endpoint still
+advertises the legacy, non-compliant full-genesis-hash form, on both testnet and mainnet. This
+server hardcodes the values the facilitator **actually expects**, verified live via
+`curl https://facilitator.goplausible.xyz/supported`, not guessed and not the package constant.
+
+**If GoPlausible syncs their fork** to the upstream fix, both constants must be reverted back to
+importing from `@x402/avm` — see the comments at each constant in `src/config.ts` for the full
+reasoning. A tracking report was filed upstream against `x402-foundation/x402` (GoPlausible's own
+fork has issue creation restricted, so that wasn't an option).
+
+To run this server against mainnet yourself: set `NETWORK=mainnet` and `AVM_ADDRESS` to a
+**fixed** payTo address opted in to mainnet USDC (ASA `31566704`, already set in `src/config.ts`).
+The `tag` field in `routes.config.ts`'s `extra` attributes activity to the Algorand Global x402
+Challenge.
+
+## Notes
+- Tracks x402 protocol `2.26.0` (`package.json` pins `^2.26.0` for `@x402/core`, `@x402/avm`, and
+  `@x402/hono`; the Algorand discovery/Bazaar package `@x402-avm/extensions` versions separately,
+  currently `^2.6.1` — run `pnpm ls` for exact resolved versions).
+- Run `pnpm typecheck` after `pnpm install` to catch any API drift if you bump dependency versions.

@@ -1,0 +1,25 @@
+{
+  "name": "hosannaith-client",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Tiny client for the Hosannaith x402 reliability oracle on Algorand — pay-per-call endpoint reliability scores.",
+  "keywords": ["x402", "algorand", "oracle", "reliability", "usdc", "agentic-payments"],
+  "license": "MIT",
+  "main": "index.ts",
+  "exports": { ".": "./index.ts" },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "example": "tsx example.ts"
+  },
+  "dependencies": {
+    "@x402/core": "2.26.0",
+    "@x402/fetch": "2.26.0",
+    "@x402/avm": "2.26.0",
+    "@algorandfoundation/algokit-utils": "10.0.0-alpha.42"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

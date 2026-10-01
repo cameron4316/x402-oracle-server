@@ -36,13 +36,23 @@ app.get('/reliability', async (c) => {
 // Free, unpaid health check for your OWN uptime monitoring (not payment-gated).
 app.get('/health', (c) => c.json({ ok: true, network: CONFIG.network }));
 
-// Root route: free, unpaid. Content-negotiates between a human/crawler-facing HTML page (with
-// Open Graph tags — the GoPlausible facilitator dashboard scrapes these for merchant branding)
-// and a small JSON info object for API tooling that hits `/` without an HTML Accept header.
+// Root route: free, unpaid. Nothing in the x402 payment flow calls `/`, so it's safe to default
+// to the human/crawler-facing HTML page (with Open Graph tags — the GoPlausible facilitator
+// dashboard scrapes these for merchant branding, and sends Accept: */*, so HTML must be the
+// default rather than something only served for an explicit text/html Accept). JSON is opt-in via
+// an explicit Accept: application/json, for API tooling that wants the small info object instead.
 app.get('/', (c) => {
   const accept = c.req.header('Accept') ?? '';
-  if (accept.includes('text/html')) {
-    return c.html(`<!DOCTYPE html>
+  if (accept.includes('application/json')) {
+    return c.json({
+      service: 'Hosannaith',
+      description:
+        "x402 reliability oracle on Algorand — verify any x402 endpoint's reliability before you pay it.",
+      usage: 'GET /reliability?target=<x402-endpoint-url>',
+      docs: 'https://hosannaith.com',
+    });
+  }
+  return c.html(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -70,14 +80,6 @@ app.get('/', (c) => {
   <p><a href="https://hosannaith.com">hosannaith.com</a> &middot; <code>GET /reliability?target=&lt;x402-endpoint-url&gt;</code></p>
 </body>
 </html>`);
-  }
-  return c.json({
-    service: 'Hosannaith',
-    description:
-      "x402 reliability oracle on Algorand — verify any x402 endpoint's reliability before you pay it.",
-    usage: 'GET /reliability?target=<x402-endpoint-url>',
-    docs: 'https://hosannaith.com',
-  });
 });
 
 serve({ fetch: app.fetch, port: CONFIG.port }, () => {

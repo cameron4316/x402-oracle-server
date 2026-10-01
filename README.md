@@ -46,6 +46,23 @@ USDC on Algorand via the GoPlausible facilitator and return JSON like:
 }
 ```
 
+## Use it in your own code
+
+A small TypeScript SDK wraps the full x402 pay-per-call handshake (402 → sign USDC payment →
+retry) so you don't have to implement it yourself:
+
+```ts
+import { getReliability } from 'hosannaith-client';
+
+const result = await getReliability('https://some-x402-endpoint/api', {
+  mnemonic: process.env.AVM_MNEMONIC!, // 25-word Algorand mnemonic, funded with USDC
+});
+
+console.log(result.score, result.detail.confidence);
+```
+
+See [`sdk/typescript/`](sdk/typescript/) for the client, a runnable example, and full usage docs.
+
 ## Architecture and vision
 
 The architecture is deliberately **pluggable**: every paid product implements the `Check`

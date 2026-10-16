@@ -11,7 +11,7 @@ function paidRoute(opts: {
     accepts: [
       {
         scheme: 'exact' as const,
-        price: opts.price ?? '$0.01',
+        price: opts.price ?? '$1.00',
         network: CONFIG.caip2,
         payTo: CONFIG.avmAddress,
         // `asset` is required. `tag` marks this endpoint for the Global x402 Challenge so activity

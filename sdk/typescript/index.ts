@@ -104,3 +104,147 @@ export async function getReliability(
 ): Promise<ReliabilityResult> {
   return new HosannaithClient(opts).getReliability(targetUrl);
 }
+
+// ---------------------------------------------------------------------------
+// Reliability guard — vet an x402 endpoint BEFORE you pay it.
+//
+// Wrap your paying fetch once; from then on every request is checked against
+// Hosannaith first, and a low-scoring endpoint is refused (or warned on) before
+// any USDC moves. Scores are cached per endpoint, so repeated payments to the
+// same endpoint reuse one check instead of paying for a new one each time.
+// ---------------------------------------------------------------------------
+
+/** A transparent, reproducible record of why a request was allowed or blocked. */
+export interface GuardDecision {
+  /** The endpoint the agent was about to call/pay. */
+  url: string;
+  /** Whether the request was allowed to proceed. */
+  allow: boolean;
+  status: ReliabilityResult['status'];
+  score: number | null;
+  confidence: 'history' | 'one-shot' | null;
+  /** Human-readable basis for the decision (what was compared, never more than was measured). */
+  reason: string;
+  /** True when the score was reused from cache rather than freshly paid for. */
+  cached: boolean;
+  /** Set when the reliability check itself failed (oracle down, payment error). */
+  error?: string;
+}
+
+/** Thrown in `block` mode when an endpoint fails the reliability bar. Carries the full decision. */
+export class ReliabilityGuardError extends Error {
+  readonly decision: GuardDecision;
+  constructor(decision: GuardDecision) {
+    super(`Reliability guard blocked ${decision.url}: ${decision.reason}`);
+    this.name = 'ReliabilityGuardError';
+    this.decision = decision;
+  }
+}
+
+export interface GuardOptions extends HosannaithOptions {
+  /** Block endpoints scoring below this (0–100). Default 90. */
+  minScore?: number;
+  /** `block` throws on a failing endpoint; `warn` logs and proceeds. Default `block`. */
+  mode?: 'block' | 'warn';
+  /** How long to reuse one endpoint's score, in ms. Default 15 min. */
+  cacheTtlMs?: number;
+  /** What to do when the oracle has too little data (status `unknown`). Default `allow`. */
+  onUnknown?: 'allow' | 'block';
+  /** What to do if the reliability check itself fails. Default `allow` (fail-open — an oracle
+   *  outage must not break the agent's payments). Set `block` to fail-closed. */
+  onError?: 'allow' | 'block';
+  /** Choose which requests to guard. Default: everything except calls to the oracle itself. */
+  shouldGuard?: (url: string, init?: RequestInit) => boolean;
+  /** Called with every decision — use for logging, metrics, or chaining another check (e.g. identity). */
+  onDecision?: (decision: GuardDecision) => void;
+}
+
+/**
+ * Wrap a fetch so every request to a payable endpoint is vetted by Hosannaith first.
+ *
+ *   import { wrapFetchWithReliabilityGuard } from 'hosannaith-client';
+ *   import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
+ *
+ *   const paying = wrapFetchWithPayment(fetch, client);           // your x402 payer
+ *   const safe   = wrapFetchWithReliabilityGuard(paying, { mnemonic, minScore: 90 });
+ *   await safe('https://some-x402-endpoint/api');                 // checked, then paid
+ *
+ * The guard's own oracle call is paid via x402, so `mnemonic` must be a funded,
+ * USDC-opted-in account. The oracle endpoint is never guarded (so it can't recurse).
+ */
+export function wrapFetchWithReliabilityGuard(
+  innerFetch: typeof fetch,
+  opts: GuardOptions,
+): typeof fetch {
+  if (!opts?.mnemonic) throw new Error('wrapFetchWithReliabilityGuard: `mnemonic` is required.');
+  const minScore = opts.minScore ?? 90;
+  const mode = opts.mode ?? 'block';
+  const cacheTtlMs = opts.cacheTtlMs ?? 15 * 60 * 1000;
+  const onUnknown = opts.onUnknown ?? 'allow';
+  const onError = opts.onError ?? 'allow';
+  const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const client = new HosannaithClient({ mnemonic: opts.mnemonic, baseUrl });
+  const cache = new Map<string, { result: ReliabilityResult; expires: number }>();
+
+  const urlOf = (input: RequestInfo | URL): string =>
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+
+  return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const url = urlOf(input);
+
+    // Never guard the oracle itself (would recurse), and honour the caller's filter.
+    if (url.startsWith(baseUrl) || (opts.shouldGuard && !opts.shouldGuard(url, init))) {
+      return innerFetch(input as RequestInfo, init);
+    }
+
+    let decision: GuardDecision;
+    try {
+      const now = Date.now();
+      const hit = cache.get(url);
+      let result: ReliabilityResult;
+      let cached = false;
+      if (hit && hit.expires > now) {
+        result = hit.result;
+        cached = true;
+      } else {
+        result = await client.getReliability(url);
+        cache.set(url, { result, expires: now + cacheTtlMs });
+      }
+      const confidence = result.detail?.confidence ?? null;
+      let allow: boolean;
+      let reason: string;
+      if (result.status === 'unknown') {
+        allow = onUnknown === 'allow';
+        reason = `too little data (unknown) — ${allow ? 'allowed' : 'blocked'}`;
+      } else if (typeof result.score === 'number' && result.score >= minScore) {
+        allow = true;
+        reason = `score ${result.score} >= minScore ${minScore} (${result.status})`;
+      } else {
+        allow = false;
+        reason = `score ${result.score ?? 'n/a'} < minScore ${minScore} (${result.status})`;
+      }
+      decision = { url, allow, status: result.status, score: result.score, confidence, reason, cached };
+    } catch (err) {
+      const allow = onError === 'allow';
+      decision = {
+        url,
+        allow,
+        status: 'unknown',
+        score: null,
+        confidence: null,
+        reason: `reliability check failed — ${allow ? 'allowed (fail-open)' : 'blocked (fail-closed)'}`,
+        cached: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+
+    opts.onDecision?.(decision);
+
+    if (!decision.allow) {
+      if (mode === 'block') throw new ReliabilityGuardError(decision);
+      console.warn(`[hosannaith guard] ${decision.reason} — proceeding (warn mode): ${url}`);
+    }
+
+    return innerFetch(input as RequestInfo, init);
+  }) as typeof fetch;
+}

@@ -1,0 +1,34 @@
+{
+  "name": "hosannaith-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MCP server for the Hosannaith x402 reliability oracle on Algorand — gives any MCP agent a check_x402_reliability tool.",
+  "keywords": ["mcp", "model-context-protocol", "x402", "algorand", "reliability", "oracle", "agentic-payments"],
+  "license": "MIT",
+  "author": "Cameron Vickers",
+  "homepage": "https://hosannaith.com",
+  "bin": {
+    "hosannaith-mcp": "dist/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "zod": "^3.23.0",
+    "algosdk": "^2.9.0",
+    "@x402/core": "^2.26.0",
+    "@x402/fetch": "^2.26.0",
+    "@x402/avm": "^2.26.0",
+    "@algorandfoundation/algokit-utils": ">=10.0.0-alpha.42"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -7,27 +7,22 @@
 //   const r = await getReliability('https://some-x402-endpoint/api', { mnemonic });
 //   console.log(r.score, r.detail.confidence);
 
+import algosdk from 'algosdk';
 import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
-import { toClientAvmSigner, ExactAvmScheme } from '@x402/avm';
-import {
-  ed25519SigningKeyFromWrappedSecret,
-  type WrappedEd25519Seed,
-} from '@algorandfoundation/algokit-utils/crypto';
-import { seedFromMnemonic } from '@algorandfoundation/algokit-utils/algo25';
+import { ExactAvmScheme } from '@x402/avm';
 
 // Facilitator-verified CAIP-2 for Algorand MainNet.
 // NOTE: @x402/avm ships the spec-correct *truncated* CAIP-2 form, but the live GoPlausible
 // facilitator advertises this legacy *full-genesis-hash* form via /supported, so payments must
 // match it. Verified live (2026-09): curl https://facilitator.goplausible.xyz/supported.
-// Revert to importing ALGORAND_MAINNET_CAIP2 from '@x402/avm' once GoPlausible syncs their fork.
 const ALGORAND_MAINNET_CAIP2 = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
 const DEFAULT_BASE_URL = 'https://api.hosannaith.com';
 
 export interface ReliabilityDetail {
   observations: number;
   windowHours: number;
-  uptimePct: number | null;
-  correct402Pct: number | null;
+  uptimePct: number | null; // % of probes reachable
+  correct402Pct: number | null; // % of probes that correctly demanded payment
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
   score: number | null;
@@ -58,7 +53,7 @@ export interface HosannaithOptions {
 export class HosannaithClient {
   private readonly baseUrl: string;
   private readonly mnemonic: string;
-  private fetchPromise: Promise<typeof fetch> | null = null;
+  private payingFetch: typeof fetch | null = null;
 
   constructor(opts: HosannaithOptions) {
     if (!opts?.mnemonic) throw new Error('HosannaithClient: `mnemonic` is required.');
@@ -66,23 +61,32 @@ export class HosannaithClient {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
   }
 
-  private getPayingFetch(): Promise<typeof fetch> {
-    if (!this.fetchPromise) {
-      this.fetchPromise = (async () => {
-        const secretKey = await secretKeyFromMnemonic(this.mnemonic);
-        const avmSigner = toClientAvmSigner(secretKey);
-        const client = new x402Client();
-        client.register(ALGORAND_MAINNET_CAIP2, new ExactAvmScheme(avmSigner));
-        return wrapFetchWithPayment(fetch, client) as typeof fetch;
-      })();
+  // Build an x402 paying fetch from the mnemonic. We construct a ClientAvmSigner BY HAND
+  // (address + signTransactions) rather than calling the library's signer factory: that
+  // factory's expected input has changed across @x402/avm versions, but ClientAvmSigner is the
+  // stable contract. algosdk does the mnemonic->key derivation and the Ed25519 signing.
+  private getPayingFetch(): typeof fetch {
+    if (!this.payingFetch) {
+      const { addr, sk } = algosdk.mnemonicToSecretKey(this.mnemonic.trim());
+      const signer: any = {
+        address: String(addr),
+        signTransactions: async (txns: Uint8Array[], indexesToSign?: number[]) =>
+          txns.map((txn, i) => {
+            if (indexesToSign && !indexesToSign.includes(i)) return null;
+            return algosdk.signTransaction(algosdk.decodeUnsignedTransaction(txn), sk).blob;
+          }),
+      };
+      const client = new x402Client();
+      client.register(ALGORAND_MAINNET_CAIP2, new ExactAvmScheme(signer));
+      this.payingFetch = wrapFetchWithPayment(fetch, client) as typeof fetch;
     }
-    return this.fetchPromise;
+    return this.payingFetch;
   }
 
   /** Pay for and return the reliability score of a target x402 endpoint. */
   async getReliability(targetUrl: string): Promise<ReliabilityResult> {
     if (!targetUrl) throw new Error('getReliability: `targetUrl` is required.');
-    const payingFetch = await this.getPayingFetch();
+    const payingFetch = this.getPayingFetch();
     const url = `${this.baseUrl}/reliability?target=${encodeURIComponent(targetUrl)}`;
     const res = await payingFetch(url, { method: 'GET' });
     if (!res.ok) {
@@ -99,19 +103,4 @@ export async function getReliability(
   opts: HosannaithOptions,
 ): Promise<ReliabilityResult> {
   return new HosannaithClient(opts).getReliability(targetUrl);
-}
-
-// Build the base64 signing key x402-avm expects: 32-byte Ed25519 seed + 32-byte public key.
-async function secretKeyFromMnemonic(mnemonic: string): Promise<string> {
-  const seed = seedFromMnemonic(mnemonic);
-  const seedCopy = new Uint8Array(seed);
-  const wrappedSeed: WrappedEd25519Seed = {
-    unwrapEd25519Seed: async () => seed,
-    wrapEd25519Seed: async () => {},
-  };
-  const wrappedSecret = await ed25519SigningKeyFromWrappedSecret(wrappedSeed);
-  return Buffer.concat([
-    Buffer.from(seedCopy),
-    Buffer.from(wrappedSecret.ed25519Pubkey),
-  ]).toString('base64');
 }

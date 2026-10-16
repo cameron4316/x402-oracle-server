@@ -7,7 +7,7 @@ route real USDC to it. The client handles the full x402 pay-per-call handshake f
 ## Install
 
 ```bash
-pnpm add @x402/core @x402/fetch @x402/avm @algorandfoundation/algokit-utils
+pnpm add @x402/core @x402/fetch @x402/avm algosdk
 # then drop index.ts into your project, or install this folder directly
 ```
 

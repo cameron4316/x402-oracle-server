@@ -36,6 +36,34 @@ for (const url of endpoints) {
 }
 ```
 
+## Guard every payment automatically
+
+Don't want to remember to check? Wrap your paying fetch once, and every endpoint is vetted
+*before* any USDC moves — a low-scoring endpoint is refused (or warned on) automatically. Scores
+are cached per endpoint, so repeated payments to the same endpoint reuse one check.
+
+```ts
+import { wrapFetchWithReliabilityGuard } from 'hosannaith-client';
+import { wrapFetchWithPayment, x402Client } from '@x402/fetch';
+
+const paying = wrapFetchWithPayment(fetch, x402client);          // your x402 payer
+const safe = wrapFetchWithReliabilityGuard(paying, {
+  mnemonic: process.env.AVM_MNEMONIC!,   // funds the reliability checks
+  minScore: 90,                          // refuse anything below this
+  // mode: 'warn',                       // or just log and proceed (default: 'block')
+  onDecision: (d) => console.log(`[guard] ${d.url}: ${d.reason}`),
+});
+
+// Every call is checked, then paid. A failing endpoint throws ReliabilityGuardError
+// (in block mode) before a cent leaves your wallet.
+await safe('https://some-x402-endpoint/api');
+```
+
+Options: `minScore` (default 90), `mode` (`'block'` | `'warn'`, default `'block'`), `cacheTtlMs`
+(default 15 min), `onUnknown`/`onError` (default `'allow'` — an oracle outage never breaks your
+payments), `shouldGuard`, and `onDecision`. The guard's checks are paid via x402, so `mnemonic`
+must be a funded, USDC-opted-in account.
+
 ## What you get back
 
 ```json

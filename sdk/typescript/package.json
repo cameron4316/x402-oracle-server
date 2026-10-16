@@ -1,6 +1,6 @@
 {
   "name": "hosannaith-client",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "Tiny client for the Hosannaith x402 reliability oracle on Algorand — pay-per-call endpoint reliability scores.",
   "keywords": ["x402", "algorand", "oracle", "reliability", "usdc", "agentic-payments"],

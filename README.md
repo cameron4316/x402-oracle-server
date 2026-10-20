@@ -63,6 +63,38 @@ console.log(result.score, result.detail.confidence);
 
 See [`sdk/typescript/`](sdk/typescript/) for the client, a runnable example, and full usage docs.
 
+## Use it from any MCP agent (Model Context Protocol)
+
+This repo also ships an **MCP server** in [`mcp/`](mcp/) — published to npm as
+[`hosannaith-mcp`](https://www.npmjs.com/package/hosannaith-mcp) and listed in the official
+[MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.cameron4316/hosannaith-mcp`.
+It lets any Model Context Protocol client (Claude Desktop, Cursor, and other MCP agents) vet an
+x402 endpoint's reliability before paying it.
+
+Built on the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`), it exposes three **MCP
+tools**:
+
+- `get_hosannaith_info` — free; explains the score shape and how to act on it.
+- `check_x402_reliability` — paid; reliability score for one endpoint, settled as an x402 USDC
+  micropayment on Algorand.
+- `check_x402_reliability_batch` — paid; score up to 50 endpoints in a single call.
+
+Add it to an MCP client's config:
+
+```json
+{
+  "mcpServers": {
+    "hosannaith": {
+      "command": "npx",
+      "args": ["-y", "hosannaith-mcp"],
+      "env": { "AVM_MNEMONIC": "<25-word Algorand mnemonic, funded with USDC>" }
+    }
+  }
+}
+```
+
+See [`mcp/`](mcp/) for the MCP server, its tools, and full setup docs.
+
 ## Architecture and vision
 
 The architecture is deliberately **pluggable**: every paid product implements the `Check`

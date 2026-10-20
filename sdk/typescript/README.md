@@ -4,6 +4,10 @@ A tiny client for the **Hosannaith x402 reliability oracle** on Algorand. Get a 
 reliability score (uptime, correct-402 behaviour, latency) for any x402 endpoint — before you
 route real USDC to it. The client handles the full x402 pay-per-call handshake for you.
 
+> **TL;DR** — stop paying dead endpoints. Wrap your x402 paying fetch once and every endpoint is
+> vetted before a cent moves: `wrapFetchWithReliabilityGuard(payingFetch, { mnemonic, minScore })`.
+> [Jump to the guard ↓](#guard-every-payment-automatically)
+
 ## Install
 
 ```bash
@@ -110,7 +114,7 @@ for a target queried for the first time (a single live probe, `score: null`).
 
 ## Requirements
 
-- An Algorand **MainNet** account funded with a little USDC (each call costs ~$0.01) and ALGO for fees.
+- An Algorand **MainNet** account funded with USDC (each check is $1.00, or $7.00 for a batch of up to 50) and ALGO for fees.
 - Its **25-word** mnemonic, passed as `mnemonic`. **Never commit it** — load it from an env var or a secret store.
 
 Live service: https://hosannaith.com · Endpoint: `https://api.hosannaith.com/reliability?target=<url>`

@@ -1,4 +1,14 @@
 import type { Observation } from './store.js';
+import type { CheckStatus } from '../types.js';
+
+// Map a 0-100 composite score to a status. Shared by the single check and the batch so the
+// thresholds stay in one place.
+export function statusFromScore(score: number | null): CheckStatus {
+  if (score === null) return 'unknown';
+  if (score >= 90) return 'pass';
+  if (score >= 60) return 'degraded';
+  return 'fail';
+}
 
 export interface ReliabilitySummary {
   observations: number;

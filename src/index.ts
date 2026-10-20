@@ -9,6 +9,7 @@ import { bazaarResourceServerExtension } from '@x402-avm/extensions';
 import { CONFIG } from './config.js';
 import { routes } from './routes.config.js';
 import { getCheck } from './checks/registry.js';
+import { reliabilityBatch } from './checks/reliability/batch.js';
 
 // --- x402 resource server wiring (mirrors the official Algorand tutorial) ---
 const facilitatorClient = new HTTPFacilitatorClient({ url: CONFIG.facilitatorUrl });
@@ -30,6 +31,24 @@ app.get('/reliability', async (c) => {
   const check = getCheck('reliability');
   if (!check) return c.json({ error: 'reliability check not registered' }, 500);
   const result = await check.run(target);
+  return c.json(result);
+});
+
+// --- Paid handler: batch reliability — score up to 50 endpoints in one call ---
+// Payment is gated by the middleware before this runs, so a 400 here only happens on a malformed
+// body from a client that already paid (the SDK always sends a well-formed body).
+app.post('/reliability/batch', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Expected a JSON body: { "targets": ["<endpoint-url>", ...] }' }, 400);
+  }
+  const targets = (body as { targets?: unknown } | null)?.targets;
+  if (!Array.isArray(targets)) {
+    return c.json({ error: 'Body must be { "targets": ["<endpoint-url>", ...] }' }, 400);
+  }
+  const result = await reliabilityBatch(targets);
   return c.json(result);
 });
 

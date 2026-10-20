@@ -50,4 +50,39 @@ export const routes = {
       observedAt: '2026-09-08T00:00:00.000Z',
     },
   }),
+
+  // Batch tier: score up to 50 endpoints in one paid call. Flat price (x402 declares price before
+  // the body is seen, so it can't scale with count); history-only (see checks/reliability/batch.ts).
+  'POST /reliability/batch': paidRoute({
+    price: '$7.00',
+    description:
+      'Reliability scores for up to 50 x402 endpoints in one call. POST JSON body ' +
+      '{"targets":["<endpoint-url>", ...]}. Returns a results array (same per-target shape as ' +
+      'GET /reliability). Monitored targets return a history-based score; unmonitored targets return ' +
+      '"unknown" and are enrolled for ongoing monitoring.',
+    exampleOutput: {
+      count: 2,
+      requested: 2,
+      capped: false,
+      observedAt: '2026-10-19T00:00:00.000Z',
+      results: [
+        {
+          target: 'https://api.example.com/x402-a',
+          checkId: 'reliability',
+          status: 'pass',
+          score: 98.5,
+          detail: { observations: 1440, windowHours: 24, uptimePct: 99.9, correct402Pct: 100, confidence: 'history' },
+          observedAt: '2026-10-19T00:00:00.000Z',
+        },
+        {
+          target: 'https://api.example.com/x402-b',
+          checkId: 'reliability',
+          status: 'unknown',
+          score: null,
+          detail: { observations: 0, windowHours: 24, confidence: 'pending' },
+          observedAt: '2026-10-19T00:00:00.000Z',
+        },
+      ],
+    },
+  }),
 };

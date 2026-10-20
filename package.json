@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "x402 reliability oracle for Algorand — pluggable check architecture (reliability now, compliance later).",
+  "license": "MIT",
   "scripts": {
     "monitor": "tsx src/monitor.ts",
     "dev": "tsx watch src/index.ts",

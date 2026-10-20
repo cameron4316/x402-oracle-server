@@ -13,6 +13,7 @@ USDC amount over x402 and returns a verified reliability score.
 | --- | --- | --- |
 | `get_hosannaith_info` | free | Explains what the score means and how to act on it. Call this first. |
 | `check_x402_reliability` | small USDC payment (x402 on Algorand) | Returns the reliability score for a target x402 endpoint URL. |
+| `check_x402_reliability_batch` | $7 flat (x402 on Algorand) | Scores up to 50 endpoint URLs in one call — for vetting a whole watchlist. |
 
 A score looks like:
 
@@ -38,14 +39,22 @@ A score looks like:
 - `score`: 0–100, or `null` when there isn't enough history to stand behind a number
 - `detail.confidence`: `history` (scored from accrued observations) · `one-shot` (only one live probe — treat cautiously)
 
-## Install & build
+## Install
+
+Published on npm. The easiest path is to let your MCP client run it with `npx` — nothing to
+install or build (see config below). To install the command globally instead:
 
 ```bash
-npm install
-npm run build
+npm install -g hosannaith-mcp
 ```
 
-This produces `dist/index.js`, the executable the MCP client runs.
+Or run from source:
+
+```bash
+git clone https://github.com/cameron4316/x402-oracle-server
+cd x402-oracle-server/mcp
+npm install && npm run build   # produces dist/index.js
+```
 
 ## Configure your MCP client
 
@@ -64,8 +73,8 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
 {
   "mcpServers": {
     "hosannaith": {
-      "command": "node",
-      "args": ["/absolute/path/to/hosannaith-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "hosannaith-mcp"],
       "env": {
         "AVM_MNEMONIC": "word1 word2 ... word25"
       }
@@ -74,7 +83,8 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
 }
 ```
 
-Use the absolute path to `dist/index.js`. Restart Claude Desktop.
+Then fully quit and reopen Claude Desktop. (Running from source instead? Use
+`"command": "node"` with the absolute path to `mcp/dist/index.js` as the single arg.)
 
 ### Cursor
 
@@ -84,8 +94,8 @@ Add to `~/.cursor/mcp.json` (or the project's `.cursor/mcp.json`):
 {
   "mcpServers": {
     "hosannaith": {
-      "command": "node",
-      "args": ["/absolute/path/to/hosannaith-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "hosannaith-mcp"],
       "env": {
         "AVM_MNEMONIC": "word1 word2 ... word25"
       }

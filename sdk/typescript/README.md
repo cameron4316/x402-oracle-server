@@ -7,9 +7,11 @@ route real USDC to it. The client handles the full x402 pay-per-call handshake f
 ## Install
 
 ```bash
-pnpm add @x402/core @x402/fetch @x402/avm algosdk
-# then drop index.ts into your project, or install this folder directly
+npm i hosannaith-client @x402/core @x402/fetch @x402/avm
 ```
+
+The `@x402/*` packages are peer dependencies — install them alongside. `algosdk` is a regular
+dependency and is pulled in automatically.
 
 ## Use
 
@@ -36,6 +38,24 @@ for (const url of endpoints) {
 }
 ```
 
+## Score a whole watchlist in one call (batch)
+
+Scoring many endpoints? One paid batch call ($7 flat) scores up to **50** at once, instead of 50
+separate payments. Monitored targets return a full score; a target with no history yet comes back
+`unknown` and is enrolled for monitoring.
+
+```ts
+import { getReliabilityBatch } from 'hosannaith-client';
+
+const batch = await getReliabilityBatch(
+  ['https://a.example/x402', 'https://b.example/x402', 'https://c.example/x402'],
+  { mnemonic: process.env.AVM_MNEMONIC! },
+);
+
+console.log(`${batch.count} scored`);
+const trustworthy = batch.results.filter((r) => r.status === 'pass').map((r) => r.target);
+```
+
 ## Guard every payment automatically
 
 Don't want to remember to check? Wrap your paying fetch once, and every endpoint is vetted
@@ -51,18 +71,21 @@ const safe = wrapFetchWithReliabilityGuard(paying, {
   mnemonic: process.env.AVM_MNEMONIC!,   // funds the reliability checks
   minScore: 90,                          // refuse anything below this
   // mode: 'warn',                       // or just log and proceed (default: 'block')
+  // cacheTtlMs: 15 * 60 * 1000,         // reuse a score for 15 min (default)
   onDecision: (d) => console.log(`[guard] ${d.url}: ${d.reason}`),
 });
 
-// Every call is checked, then paid. A failing endpoint throws ReliabilityGuardError
-// (in block mode) before a cent leaves your wallet.
+// From here on, every call is checked, then paid. A failing endpoint throws
+// ReliabilityGuardError (in block mode) before a cent leaves your wallet.
 await safe('https://some-x402-endpoint/api');
 ```
 
 Options: `minScore` (default 90), `mode` (`'block'` | `'warn'`, default `'block'`), `cacheTtlMs`
-(default 15 min), `onUnknown`/`onError` (default `'allow'` — an oracle outage never breaks your
-payments), `shouldGuard`, and `onDecision`. The guard's checks are paid via x402, so `mnemonic`
-must be a funded, USDC-opted-in account.
+(default 15 min), `onUnknown`/`onError` (`'allow'` | `'block'` — both default `'allow'`, so an
+oracle outage never breaks your payments), `shouldGuard` (filter which requests to check), and
+`onDecision` (observe every verdict — handy for metrics or chaining another check like identity).
+
+The guard's own checks are paid via x402, so `mnemonic` must be a funded, USDC-opted-in account.
 
 ## What you get back
 

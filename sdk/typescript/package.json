@@ -1,10 +1,18 @@
 {
   "name": "hosannaith-client",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "Tiny client for the Hosannaith x402 reliability oracle on Algorand — pay-per-call endpoint reliability scores.",
   "keywords": ["x402", "algorand", "oracle", "reliability", "usdc", "agentic-payments"],
   "license": "MIT",
+  "author": "Cameron Vickers",
+  "homepage": "https://hosannaith.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cameron4316/x402-oracle-server.git",
+    "directory": "sdk/typescript"
+  },
+  "bugs": "https://github.com/cameron4316/x402-oracle-server/issues",
   "main": "index.ts",
   "exports": { ".": "./index.ts" },
   "scripts": {

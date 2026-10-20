@@ -87,6 +87,9 @@ server.registerTool(
           'AVM_MNEMONIC environment variable to be set on this MCP server to a funded (low-balance, throwaway)',
           'Algorand account that has opted into USDC. The mnemonic is read only from the environment and is',
           'never logged or returned.',
+          '',
+          'Scoring a watchlist? check_x402_reliability_batch(targetUrls) scores up to 50 endpoints in one',
+          'paid call ($7 flat) — cheaper than calling check_x402_reliability for each.',
         ].join('\n'),
       },
     ],
@@ -168,6 +171,97 @@ server.registerTool(
               `Failed to get a reliability score for ${targetUrl}: ` +
               (err instanceof Error ? err.message : String(err)) +
               '. Check that AVM_MNEMONIC is a funded USDC-opted-in account and that the target URL is reachable.',
+          },
+        ],
+      };
+    }
+  },
+);
+
+// --- Paid tool: batch reliability — score up to 50 endpoints in one call ---
+server.registerTool(
+  'check_x402_reliability_batch',
+  {
+    title: 'Batch-check x402 endpoint reliability',
+    description:
+      'Paid (one small USDC payment via x402 on Algorand — $7 flat for up to 50 targets). Scores ' +
+      'many x402 endpoints in a single call: pass a list of URLs, get a reliability score for each. ' +
+      'Cheaper than checking each separately when you have a watchlist to vet before routing payments. ' +
+      'Requires the AVM_MNEMONIC environment variable on this server.',
+    inputSchema: {
+      targetUrls: z
+        .array(z.string().url())
+        .min(1)
+        .max(50)
+        .describe('Up to 50 x402 endpoint URLs to score in one paid call.'),
+    },
+  },
+  async ({ targetUrls }) => {
+    const mnemonic = process.env.AVM_MNEMONIC;
+    if (!mnemonic) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text:
+              'AVM_MNEMONIC is not set. This tool pays for the scores via x402, so the MCP server needs the ' +
+              '25-word mnemonic of a funded, USDC-opted-in Algorand account in the AVM_MNEMONIC environment ' +
+              'variable. Add it to this server\'s "env" in your MCP client config and restart.',
+          },
+        ],
+      };
+    }
+
+    try {
+      const payingFetch = payingFetchFromMnemonic(mnemonic);
+      const res = await payingFetch(`${BASE_URL}/reliability/batch`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ targets: targetUrls }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        return {
+          isError: true,
+          content: [
+            { type: 'text', text: `Hosannaith batch request failed (HTTP ${res.status}): ${body || '(no body)'}` },
+          ],
+        };
+      }
+
+      const result = (await res.json()) as {
+        results: Array<{ status: string }>;
+        count: number;
+        requested: number;
+        capped: boolean;
+      };
+      const tally = result.results.reduce<Record<string, number>>((acc, r) => {
+        acc[r.status] = (acc[r.status] ?? 0) + 1;
+        return acc;
+      }, {});
+      const summary =
+        `Hosannaith batch: scored ${result.count} of ${result.requested}` +
+        (result.capped ? ' (capped at 50)' : '') +
+        ` — pass=${tally.pass ?? 0} degraded=${tally.degraded ?? 0} fail=${tally.fail ?? 0} unknown=${tally.unknown ?? 0}`;
+
+      return {
+        content: [
+          { type: 'text', text: summary },
+          { type: 'text', text: JSON.stringify(result, null, 2) },
+        ],
+      };
+    } catch (err) {
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text:
+              'Failed to batch-score the endpoints: ' +
+              (err instanceof Error ? err.message : String(err)) +
+              '. Check that AVM_MNEMONIC is a funded, USDC-opted-in account.',
           },
         ],
       };

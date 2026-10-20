@@ -1,14 +1,19 @@
 import type { Observation, ObservationStore } from './store.js';
 
-// Probe an x402 endpoint WITHOUT paying. A healthy paid endpoint should answer an unpaid
-// GET with HTTP 402 Payment Required. We record exactly what happened — no smoothing.
-export async function probe(target: string, timeoutMs = 10_000): Promise<Observation> {
+type ProbeMethod = 'GET' | 'POST';
+// Most x402 resources are GET, but many only serve POST and would answer a GET with 404/405 —
+// scoring those as "no payment demanded" would be wrong. So probe GET first; if it doesn't return
+// a 402, try POST. A healthy x402 endpoint answers an unpaid request with 402 on the method it
+// serves. We never send a request body, so a well-gated endpoint returns 402 before doing any work.
+const PROBE_METHODS: ProbeMethod[] = ['GET', 'POST'];
+
+async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number): Promise<Observation> {
   const at = new Date().toISOString();
   const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(target, { method: 'GET', signal: controller.signal });
+    const res = await fetch(target, { method, signal: controller.signal });
     const latencyMs = Date.now() - started;
     return {
       target,
@@ -31,6 +36,19 @@ export async function probe(target: string, timeoutMs = 10_000): Promise<Observa
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Probe an x402 endpoint WITHOUT paying. Tries GET, then POST only if GET didn't yield a 402
+// (so GET endpoints cost exactly one request). Returns the attempt that correctly demanded
+// payment; otherwise the most informative attempt (preferring a reachable one).
+export async function probe(target: string, timeoutMs = 10_000): Promise<Observation> {
+  let fallback: Observation | null = null;
+  for (const method of PROBE_METHODS) {
+    const obs = await probeOnce(target, method, timeoutMs);
+    if (obs.demandedPayment) return obs;
+    if (!fallback || (obs.reachable && !fallback.reachable)) fallback = obs;
+  }
+  return fallback!;
 }
 
 // Runs forever: probe every target on an interval and append each observation.

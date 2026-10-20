@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cameron4316/hosannaith-mcp",
+  "description": "Check x402 endpoint reliability on Algorand before an agent routes a payment there.",
+  "repository": {
+    "url": "https://github.com/cameron4316/x402-oracle-server",
+    "source": "github"
+  },
+  "version": "0.2.1",
+  "websiteUrl": "https://hosannaith.com",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "hosannaith-mcp",
+      "version": "0.2.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AVM_MNEMONIC",
+          "description": "25-word mnemonic of a funded, USDC-opted-in Algorand account used to pay for reliability scores. Use a low-balance throwaway account.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

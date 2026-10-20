@@ -40,6 +40,26 @@ export interface ReliabilityResult {
   observedAt: string;
 }
 
+/** One endpoint's result inside a batch. Mirrors ReliabilityResult, but `confidence` may also be
+ *  'pending' — a target with no history yet, now enrolled for monitoring. */
+export interface BatchItemResult {
+  target: string;
+  checkId: string;
+  status: 'pass' | 'degraded' | 'fail' | 'unknown';
+  score: number | null;
+  detail: { confidence?: 'history' | 'one-shot' | 'pending'; [k: string]: unknown };
+  observedAt: string;
+}
+
+/** Return shape of getReliabilityBatch. */
+export interface BatchReliabilityResult {
+  results: BatchItemResult[];
+  count: number; // how many were scored (after dedupe + the 50 cap)
+  requested: number; // how many you sent
+  capped: boolean; // true if you sent more than the cap
+  observedAt: string;
+}
+
 export interface HosannaithOptions {
   /** 25-word Algorand (algo25) mnemonic of the account that pays. Keep it secret — never commit it. */
   mnemonic: string;
@@ -95,6 +115,25 @@ export class HosannaithClient {
     }
     return (await res.json()) as ReliabilityResult;
   }
+
+  /** Pay once and score up to 50 endpoints in a single batch call ($7 flat). Targets with no
+   *  monitoring history yet come back `unknown` and are enrolled for ongoing monitoring. */
+  async getReliabilityBatch(targets: string[]): Promise<BatchReliabilityResult> {
+    if (!Array.isArray(targets) || targets.length === 0) {
+      throw new Error('getReliabilityBatch: `targets` must be a non-empty array of URLs.');
+    }
+    const payingFetch = this.getPayingFetch();
+    const res = await payingFetch(`${this.baseUrl}/reliability/batch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ targets }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Hosannaith batch request failed (HTTP ${res.status}): ${body || '(no body)'}`);
+    }
+    return (await res.json()) as BatchReliabilityResult;
+  }
 }
 
 /** One-shot convenience helper: builds a client and makes a single call. */
@@ -103,6 +142,14 @@ export async function getReliability(
   opts: HosannaithOptions,
 ): Promise<ReliabilityResult> {
   return new HosannaithClient(opts).getReliability(targetUrl);
+}
+
+/** One-shot batch helper: builds a client and scores many endpoints in one paid call. */
+export async function getReliabilityBatch(
+  targets: string[],
+  opts: HosannaithOptions,
+): Promise<BatchReliabilityResult> {
+  return new HosannaithClient(opts).getReliabilityBatch(targets);
 }
 
 // ---------------------------------------------------------------------------

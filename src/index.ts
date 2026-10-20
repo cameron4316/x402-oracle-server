@@ -185,7 +185,7 @@ app.get('/', (c) => {
 <meta property="og:site_name" content="Hosannaith">
 <meta property="og:title" content="Hosannaith — x402 Reliability Oracle">
 <meta property="og:description" content="Verify any x402 endpoint's reliability — uptime, correct-402 behaviour, latency — before you route USDC to it. Live on Algorand Mainnet.">
-<meta property="og:image" content="https://hosannaith.com/og-image.png">
+<meta property="og:image" content="https://api.hosannaith.com/og-image.png">
 <meta property="og:url" content="https://api.hosannaith.com/">
 <meta property="og:type" content="website">
 <style>
@@ -203,6 +203,35 @@ app.get('/', (c) => {
   <p><a href="https://hosannaith.com">hosannaith.com</a> &middot; <code>GET /reliability?target=&lt;x402-endpoint-url&gt;</code></p>
 </body>
 </html>`);
+});
+
+// OG image, served same-origin from this host so the GoPlausible facilitator's scraper (which
+// fetches api.hosannaith.com/ for merchant branding) can pull the logo without a cross-origin hop
+// to the apex site. The asset itself lives on the apex; mirror it once into memory and serve it
+// here, falling back to a redirect if the apex is briefly unreachable at boot.
+const OG_IMAGE_SOURCE = 'https://hosannaith.com/og-image.png';
+let ogImageCache: { body: ArrayBuffer; type: string } | null = null;
+async function loadOgImage(): Promise<void> {
+  try {
+    const res = await fetch(OG_IMAGE_SOURCE);
+    if (res.ok) {
+      ogImageCache = {
+        body: await res.arrayBuffer(),
+        type: res.headers.get('content-type') ?? 'image/png',
+      };
+    }
+  } catch {
+    // leave the cache empty; the route redirects to the source until a later load succeeds
+  }
+}
+void loadOgImage();
+
+app.get('/og-image.png', async (c) => {
+  if (!ogImageCache) await loadOgImage();
+  if (!ogImageCache) return c.redirect(OG_IMAGE_SOURCE, 302);
+  c.header('Content-Type', ogImageCache.type);
+  c.header('Cache-Control', 'public, max-age=86400');
+  return c.body(ogImageCache.body);
 });
 
 serve({ fetch: app.fetch, port: CONFIG.port }, () => {

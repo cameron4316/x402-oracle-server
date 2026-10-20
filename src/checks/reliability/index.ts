@@ -1,7 +1,7 @@
 import { dirname, join } from 'node:path';
 import type { Check, CheckResult } from '../types.js';
 import { JsonlObservationStore } from './store.js';
-import { summarize } from './score.js';
+import { summarize, statusFromScore } from './score.js';
 import { probe } from './monitor.js';
 import { TargetRegistry } from './targets.js';
 import { CONFIG } from '../../config.js';
@@ -44,14 +44,7 @@ export const reliabilityCheck: Check = {
     }
 
     const summary = summarize(obs, DEFAULT_WINDOW_HOURS);
-    const status: CheckResult['status'] =
-      summary.score === null
-        ? 'unknown'
-        : summary.score >= 90
-          ? 'pass'
-          : summary.score >= 60
-            ? 'degraded'
-            : 'fail';
+    const status = statusFromScore(summary.score);
     return {
       target,
       checkId: 'reliability',

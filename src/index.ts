@@ -55,6 +55,110 @@ app.post('/reliability/batch', async (c) => {
 // Free, unpaid health check for your OWN uptime monitoring (not payment-gated).
 app.get('/health', (c) => c.json({ ok: true, network: CONFIG.network }));
 
+// --- Agent discovery (free, unpaid): let autonomous agents find and understand this oracle ---
+const API_BASE = 'https://api.hosannaith.com';
+
+// Machine-readable x402 discovery document, generated from the live route config so it never
+// drifts. Shape follows the x402 v2 discovery convention (name / description / resources[]).
+function wellKnownX402() {
+  const resources = Object.entries(routes).map(([route, cfg]) => {
+    const [method, path] = route.split(' ');
+    const accept = (cfg as { accepts: Array<Record<string, any>> }).accepts[0];
+    const dollars = Number(String(accept.price).replace(/[^0-9.]/g, '')) || 0;
+    const amount = String(Math.round(dollars * 1_000_000)); // USDC has 6 decimals
+    return {
+      url: `${API_BASE}${path}`,
+      method,
+      description: (cfg as { description: string }).description,
+      network: accept.network,
+      asset: String(accept.extra.asset),
+      amount,
+      payTo: accept.payTo,
+      extra: { tag: accept.extra.tag, route },
+    };
+  });
+  return {
+    x402Version: 2,
+    name: 'Hosannaith',
+    description:
+      "Reliability oracle for x402 endpoints on Algorand — verify an endpoint's uptime, " +
+      'correct-402 behaviour and latency before you route USDC to it. ' +
+      'Call GET /reliability?target=<x402-endpoint-url>.',
+    resources,
+  };
+}
+app.get('/.well-known/x402', (c) => c.json(wellKnownX402()));
+
+// Agent-facing guide (served as text/plain): what this is, how to pay it, how to read the result.
+app.get('/llms.txt', (c) =>
+  c.text(`# Hosannaith — x402 reliability oracle
+
+Reliability scoring for x402 endpoints on Algorand. Hosannaith independently and continuously
+monitors other x402 endpoints and sells a verified reliability score — uptime, correct-402
+behaviour, and latency percentiles — so an agent can decide whether an endpoint is safe to pay
+before routing USDC to it. Hosannaith is itself an x402 endpoint.
+
+Website: https://hosannaith.com
+API base: ${API_BASE}
+Discovery: ${API_BASE}/.well-known/x402
+
+## Network
+- Protocol: x402 v2
+- Chain: Algorand mainnet
+- Facilitator: ${CONFIG.facilitatorUrl}
+- Network (CAIP-2): ${CONFIG.caip2}
+- Asset: USDC, ASA ${CONFIG.usdcAsaId} (6 decimals)
+- payTo: ${CONFIG.avmAddress}
+- Challenge tag: ${CONFIG.competitionTag} (present on every paid 402)
+
+## How to pay (x402 flow)
+1. GET the paid endpoint with no payment -> HTTP 402 Payment Required, with a PAYMENT-REQUIRED
+   header describing the requirement.
+2. Pay the advertised requirement with any x402 client (exact scheme on the Algorand AVM).
+3. Retry the same request with the PAYMENT-SIGNATURE header.
+4. On success -> HTTP 200 with the JSON result below, settled in USDC on Algorand mainnet.
+
+## Paid endpoint
+GET /reliability?target=<x402-endpoint-url>   -   $0.01 (10000 uUSDC)
+Score the reliability of a target x402 endpoint.
+
+Request
+- target (query, required): full URL of the x402 endpoint to score.
+
+Response (application/json)
+{
+  "target": "<url>",
+  "checkId": "reliability",
+  "status": "pass" | "degraded" | "fail" | "unknown",
+  "score": <number 0-100 | null>,
+  "detail": {
+    "observations": <int>,
+    "windowHours": 24,
+    "uptimePct": <number 0-100 | null>,
+    "correct402Pct": <number 0-100 | null>,
+    "p50LatencyMs": <int | null>,
+    "p95LatencyMs": <int | null>,
+    "confidence": "history" | "one-shot"
+  },
+  "observedAt": "<ISO-8601 timestamp>"
+}
+
+How to use the result
+- status: pass = score >= 90, degraded = 60-89, fail = < 60, unknown = not enough data yet.
+- confidence: "history" = backed by accumulated monitoring; "one-shot" = first sighting, a single
+  live probe (score may be null). A target queried for the first time is enrolled for ongoing
+  monitoring, so confidence improves on subsequent calls.
+- Decision rule for agents: before routing USDC to an unfamiliar x402 endpoint, call this first.
+  If status is "fail" or the score is low, treat the endpoint as risky.
+
+## Free endpoints
+GET /health            - liveness check: {"ok":true,...}
+GET /                  - service info (send Accept: application/json for JSON)
+GET /.well-known/x402  - machine-readable discovery document
+GET /llms.txt          - this file
+`),
+);
+
 // Root route: free, unpaid. Nothing in the x402 payment flow calls `/`, so it's safe to default
 // to the human/crawler-facing HTML page (with Open Graph tags — the GoPlausible facilitator
 // dashboard scrapes these for merchant branding, and sends Accept: */*, so HTML must be the

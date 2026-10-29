@@ -1,0 +1,66 @@
+From 43b437e61fa133e0f72de27a6152521926866895 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 08:19:11 -0600
+Subject: [PATCH] docs: document the MCP server in the root README
+
+Glama's indexer reads the repository root README to confirm a submission
+implements an MCP server. The root README only covered the oracle API and the
+TypeScript SDK, so the hosannaith-mcp server (which lives in mcp/) wasn't
+visible there and the Glama submission was rejected as "not an MCP server".
+
+Add a "Use it from any MCP agent" section covering the MCP server, its three
+MCP tools, the @modelcontextprotocol/sdk it is built on, the npm package, and
+the official MCP Registry listing (io.github.cameron4316/hosannaith-mcp).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ README.md | 32 ++++++++++++++++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/README.md b/README.md
+index 31a156e..1eaf04b 100644
+--- a/README.md
++++ b/README.md
+@@ -63,6 +63,38 @@ console.log(result.score, result.detail.confidence);
+ 
+ See [`sdk/typescript/`](sdk/typescript/) for the client, a runnable example, and full usage docs.
+ 
++## Use it from any MCP agent (Model Context Protocol)
++
++This repo also ships an **MCP server** in [`mcp/`](mcp/) — published to npm as
++[`hosannaith-mcp`](https://www.npmjs.com/package/hosannaith-mcp) and listed in the official
++[MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.cameron4316/hosannaith-mcp`.
++It lets any Model Context Protocol client (Claude Desktop, Cursor, and other MCP agents) vet an
++x402 endpoint's reliability before paying it.
++
++Built on the official MCP TypeScript SDK (`@modelcontextprotocol/sdk`), it exposes three **MCP
++tools**:
++
++- `get_hosannaith_info` — free; explains the score shape and how to act on it.
++- `check_x402_reliability` — paid; reliability score for one endpoint, settled as an x402 USDC
++  micropayment on Algorand.
++- `check_x402_reliability_batch` — paid; score up to 50 endpoints in a single call.
++
++Add it to an MCP client's config:
++
++```json
++{
++  "mcpServers": {
++    "hosannaith": {
++      "command": "npx",
++      "args": ["-y", "hosannaith-mcp"],
++      "env": { "AVM_MNEMONIC": "<25-word Algorand mnemonic, funded with USDC>" }
++    }
++  }
++}
++```
++
++See [`mcp/`](mcp/) for the MCP server, its tools, and full setup docs.
++
+ ## Architecture and vision
+ 
+ The architecture is deliberately **pluggable**: every paid product implements the `Check`
+-- 
+2.43.0
+

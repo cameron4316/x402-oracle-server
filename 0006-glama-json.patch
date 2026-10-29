@@ -1,0 +1,29 @@
+From fde574a3abadeab2cb2f5a133d542e6db79eb859 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 09:07:10 -0600
+Subject: [PATCH] chore: add glama.json to declare MCP server ownership
+
+Pins the Glama listing's maintainer to the GitHub owner, so ownership of the
+hosannaith-mcp server listing is declared in the repo itself (re-run the Glama
+claim flow once to sync).
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ glama.json | 4 ++++
+ 1 file changed, 4 insertions(+)
+ create mode 100644 glama.json
+
+diff --git a/glama.json b/glama.json
+new file mode 100644
+index 0000000..5a4ff4a
+--- /dev/null
++++ b/glama.json
+@@ -0,0 +1,4 @@
++{
++  "$schema": "https://glama.ai/mcp/schemas/server.json",
++  "maintainers": ["cameron4316"]
++}
+-- 
+2.43.0
+

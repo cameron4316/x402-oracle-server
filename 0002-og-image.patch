@@ -1,0 +1,79 @@
+From 5a15a60420715e84c494d0fd3516c39aece5bbc4 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 07:46:23 -0600
+Subject: [PATCH] feat: serve og-image.png same-origin for facilitator logo
+ scraping
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The GoPlausible facilitator scrapes api.hosannaith.com/ for merchant branding
+(og:* tags) to render the logo on the leaderboard. og:image pointed cross-subdomain
+to hosannaith.com, which a strict scraper may not follow — the merchant name scraped
+through but the logo did not.
+
+- add GET /og-image.png on this host, mirroring the apex asset into memory at boot
+  (redirect fallback if the apex is briefly unreachable)
+- point og:image at https://api.hosannaith.com/og-image.png (same origin as the
+  scraped root)
+
+No new dependency; the image still originates from the apex site.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ src/index.ts | 31 ++++++++++++++++++++++++++++++-
+ 1 file changed, 30 insertions(+), 1 deletion(-)
+
+diff --git a/src/index.ts b/src/index.ts
+index 5a4978b..332327a 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -185,7 +185,7 @@ app.get('/', (c) => {
+ <meta property="og:site_name" content="Hosannaith">
+ <meta property="og:title" content="Hosannaith — x402 Reliability Oracle">
+ <meta property="og:description" content="Verify any x402 endpoint's reliability — uptime, correct-402 behaviour, latency — before you route USDC to it. Live on Algorand Mainnet.">
+-<meta property="og:image" content="https://hosannaith.com/og-image.png">
++<meta property="og:image" content="https://api.hosannaith.com/og-image.png">
+ <meta property="og:url" content="https://api.hosannaith.com/">
+ <meta property="og:type" content="website">
+ <style>
+@@ -205,6 +205,35 @@ app.get('/', (c) => {
+ </html>`);
+ });
+ 
++// OG image, served same-origin from this host so the GoPlausible facilitator's scraper (which
++// fetches api.hosannaith.com/ for merchant branding) can pull the logo without a cross-origin hop
++// to the apex site. The asset itself lives on the apex; mirror it once into memory and serve it
++// here, falling back to a redirect if the apex is briefly unreachable at boot.
++const OG_IMAGE_SOURCE = 'https://hosannaith.com/og-image.png';
++let ogImageCache: { body: ArrayBuffer; type: string } | null = null;
++async function loadOgImage(): Promise<void> {
++  try {
++    const res = await fetch(OG_IMAGE_SOURCE);
++    if (res.ok) {
++      ogImageCache = {
++        body: await res.arrayBuffer(),
++        type: res.headers.get('content-type') ?? 'image/png',
++      };
++    }
++  } catch {
++    // leave the cache empty; the route redirects to the source until a later load succeeds
++  }
++}
++void loadOgImage();
++
++app.get('/og-image.png', async (c) => {
++  if (!ogImageCache) await loadOgImage();
++  if (!ogImageCache) return c.redirect(OG_IMAGE_SOURCE, 302);
++  c.header('Content-Type', ogImageCache.type);
++  c.header('Cache-Control', 'public, max-age=86400');
++  return c.body(ogImageCache.body);
++});
++
+ serve({ fetch: app.fetch, port: CONFIG.port }, () => {
+   console.log(
+     `x402 oracle server listening on http://localhost:${CONFIG.port} (network=${CONFIG.network})`,
+-- 
+2.43.0
+

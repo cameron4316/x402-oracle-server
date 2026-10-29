@@ -1,0 +1,58 @@
+From 51c0b109f17e824a4a8dd61e786412fd6fc88527 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 08:27:31 -0600
+Subject: [PATCH] chore: add Dockerfile that builds and runs the hosannaith-mcp
+ server
+
+Glama's "Runs from source" indexing requires a Dockerfile it can build and run
+to perform automated safety/quality checks on the MCP server. Multi-stage build:
+compile mcp/ TypeScript to dist/, then a slim runtime image with production
+dependencies only, entrypoint `node dist/index.js` (stdio MCP server). AVM_MNEMONIC
+is supplied at runtime and is only needed for the paid tools, so initialization and
+tool-listing checks succeed without it.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ Dockerfile | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+ create mode 100644 Dockerfile
+
+diff --git a/Dockerfile b/Dockerfile
+new file mode 100644
+index 0000000..0aeefa3
+--- /dev/null
++++ b/Dockerfile
+@@ -0,0 +1,29 @@
++# Builds and runs the hosannaith-mcp Model Context Protocol server (source in mcp/).
++# The server communicates over stdio — this is how an MCP client, and Glama's automated
++# safety/quality checks, talk to it.
++#
++#   docker build -t hosannaith-mcp .
++#   docker run --rm -i -e AVM_MNEMONIC="<25-word Algorand mnemonic>" hosannaith-mcp
++#
++# AVM_MNEMONIC is only needed to invoke the paid tools; the server starts and lists its
++# tools without it, so initialization/tool-listing checks pass with no secret present.
++
++# ---- build stage: compile mcp/ TypeScript to dist/ ----
++FROM node:22-slim AS build
++WORKDIR /app
++COPY mcp/package.json mcp/tsconfig.json ./
++RUN npm install --no-audit --no-fund
++COPY mcp/src ./src
++RUN npm run build
++
++# ---- runtime stage: production dependencies + compiled output ----
++FROM node:22-slim
++WORKDIR /app
++ENV NODE_ENV=production
++COPY mcp/package.json ./
++RUN npm install --omit=dev --no-audit --no-fund
++COPY --from=build /app/dist ./dist
++COPY mcp/README.md ./README.md
++
++# stdio MCP server
++ENTRYPOINT ["node", "dist/index.js"]
+-- 
+2.43.0
+

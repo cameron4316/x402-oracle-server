@@ -1,0 +1,461 @@
+From 2d8eecd763ab2afe308f2c1694ef66a92d9e0417 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Mon, 19 Oct 2026 20:40:56 -0600
+Subject: [PATCH] chore: reconcile repo mcp/ and sdk/typescript/ with published
+ npm packages
+
+Fold the shipped code back into the source of truth so GitHub matches npm:
+
+- mcp/: 0.1.0 -> 0.2.1. Adds the check_x402_reliability_batch tool,
+  the mcpName field, and a server.json manifest. The package is now listed
+  in the official MCP Registry as io.github.cameron4316/hosannaith-mcp.
+- sdk/typescript/ (hosannaith-client): 0.2.0 -> 0.3.0. Adds getReliabilityBatch
+  plus batch result types, and repository/homepage metadata. Workspace build
+  (source-direct via tsx) is unchanged; 0.3.0 imports match 0.2.0.
+
+No change to the API server. Brings the repo in line with hosannaith-mcp@0.2.1
+and hosannaith-client@0.3.0 on npm.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ mcp/README.md               | 28 +++++++----
+ mcp/package.json            | 17 +++++--
+ mcp/server.json             | 30 ++++++++++++
+ mcp/src/index.ts            | 94 +++++++++++++++++++++++++++++++++++++
+ sdk/typescript/README.md    | 37 ++++++++++++---
+ sdk/typescript/index.ts     | 47 +++++++++++++++++++
+ sdk/typescript/package.json | 10 +++-
+ 7 files changed, 243 insertions(+), 20 deletions(-)
+ create mode 100644 mcp/server.json
+
+diff --git a/mcp/README.md b/mcp/README.md
+index 516ab76..4302476 100644
+--- a/mcp/README.md
++++ b/mcp/README.md
+@@ -13,6 +13,7 @@ USDC amount over x402 and returns a verified reliability score.
+ | --- | --- | --- |
+ | `get_hosannaith_info` | free | Explains what the score means and how to act on it. Call this first. |
+ | `check_x402_reliability` | small USDC payment (x402 on Algorand) | Returns the reliability score for a target x402 endpoint URL. |
++| `check_x402_reliability_batch` | $7 flat (x402 on Algorand) | Scores up to 50 endpoint URLs in one call — for vetting a whole watchlist. |
+ 
+ A score looks like:
+ 
+@@ -38,14 +39,22 @@ A score looks like:
+ - `score`: 0–100, or `null` when there isn't enough history to stand behind a number
+ - `detail.confidence`: `history` (scored from accrued observations) · `one-shot` (only one live probe — treat cautiously)
+ 
+-## Install & build
++## Install
++
++Published on npm. The easiest path is to let your MCP client run it with `npx` — nothing to
++install or build (see config below). To install the command globally instead:
+ 
+ ```bash
+-npm install
+-npm run build
++npm install -g hosannaith-mcp
+ ```
+ 
+-This produces `dist/index.js`, the executable the MCP client runs.
++Or run from source:
++
++```bash
++git clone https://github.com/cameron4316/x402-oracle-server
++cd x402-oracle-server/mcp
++npm install && npm run build   # produces dist/index.js
++```
+ 
+ ## Configure your MCP client
+ 
+@@ -64,8 +73,8 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+ {
+   "mcpServers": {
+     "hosannaith": {
+-      "command": "node",
+-      "args": ["/absolute/path/to/hosannaith-mcp/dist/index.js"],
++      "command": "npx",
++      "args": ["-y", "hosannaith-mcp"],
+       "env": {
+         "AVM_MNEMONIC": "word1 word2 ... word25"
+       }
+@@ -74,7 +83,8 @@ Windows: `%APPDATA%\Claude\claude_desktop_config.json`):
+ }
+ ```
+ 
+-Use the absolute path to `dist/index.js`. Restart Claude Desktop.
++Then fully quit and reopen Claude Desktop. (Running from source instead? Use
++`"command": "node"` with the absolute path to `mcp/dist/index.js` as the single arg.)
+ 
+ ### Cursor
+ 
+@@ -84,8 +94,8 @@ Add to `~/.cursor/mcp.json` (or the project's `.cursor/mcp.json`):
+ {
+   "mcpServers": {
+     "hosannaith": {
+-      "command": "node",
+-      "args": ["/absolute/path/to/hosannaith-mcp/dist/index.js"],
++      "command": "npx",
++      "args": ["-y", "hosannaith-mcp"],
+       "env": {
+         "AVM_MNEMONIC": "word1 word2 ... word25"
+       }
+diff --git a/mcp/package.json b/mcp/package.json
+index 6ce0ddf..b3e878b 100644
+--- a/mcp/package.json
++++ b/mcp/package.json
+@@ -1,12 +1,19 @@
+ {
+   "name": "hosannaith-mcp",
+-  "version": "0.1.0",
++  "version": "0.2.1",
++  "mcpName": "io.github.cameron4316/hosannaith-mcp",
+   "type": "module",
+-  "description": "MCP server for the Hosannaith x402 reliability oracle on Algorand — gives any MCP agent a check_x402_reliability tool.",
++  "description": "MCP server for the Hosannaith x402 reliability oracle on Algorand — gives any MCP agent a check_x402_reliability tool to vet an endpoint before paying it.",
+   "keywords": ["mcp", "model-context-protocol", "x402", "algorand", "reliability", "oracle", "agentic-payments"],
+   "license": "MIT",
+   "author": "Cameron Vickers",
+   "homepage": "https://hosannaith.com",
++  "repository": {
++    "type": "git",
++    "url": "git+https://github.com/cameron4316/x402-oracle-server.git",
++    "directory": "mcp"
++  },
++  "bugs": "https://github.com/cameron4316/x402-oracle-server/issues",
+   "bin": {
+     "hosannaith-mcp": "dist/index.js"
+   },
+@@ -14,9 +21,13 @@
+   "engines": {
+     "node": ">=18"
+   },
++  "publishConfig": {
++    "access": "public"
++  },
+   "scripts": {
+     "build": "tsc -p tsconfig.json",
+-    "start": "node dist/index.js"
++    "start": "node dist/index.js",
++    "prepublishOnly": "npm run build"
+   },
+   "dependencies": {
+     "@modelcontextprotocol/sdk": "^1.10.0",
+diff --git a/mcp/server.json b/mcp/server.json
+new file mode 100644
+index 0000000..40745e7
+--- /dev/null
++++ b/mcp/server.json
+@@ -0,0 +1,30 @@
++{
++  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
++  "name": "io.github.cameron4316/hosannaith-mcp",
++  "description": "Check x402 endpoint reliability on Algorand before an agent routes a payment there.",
++  "repository": {
++    "url": "https://github.com/cameron4316/x402-oracle-server",
++    "source": "github"
++  },
++  "version": "0.2.1",
++  "websiteUrl": "https://hosannaith.com",
++  "packages": [
++    {
++      "registryType": "npm",
++      "identifier": "hosannaith-mcp",
++      "version": "0.2.1",
++      "transport": {
++        "type": "stdio"
++      },
++      "environmentVariables": [
++        {
++          "name": "AVM_MNEMONIC",
++          "description": "25-word mnemonic of a funded, USDC-opted-in Algorand account used to pay for reliability scores. Use a low-balance throwaway account.",
++          "isRequired": true,
++          "isSecret": true,
++          "format": "string"
++        }
++      ]
++    }
++  ]
++}
+diff --git a/mcp/src/index.ts b/mcp/src/index.ts
+index 1890f5b..25ada13 100644
+--- a/mcp/src/index.ts
++++ b/mcp/src/index.ts
+@@ -87,6 +87,9 @@ server.registerTool(
+           'AVM_MNEMONIC environment variable to be set on this MCP server to a funded (low-balance, throwaway)',
+           'Algorand account that has opted into USDC. The mnemonic is read only from the environment and is',
+           'never logged or returned.',
++          '',
++          'Scoring a watchlist? check_x402_reliability_batch(targetUrls) scores up to 50 endpoints in one',
++          'paid call ($7 flat) — cheaper than calling check_x402_reliability for each.',
+         ].join('\n'),
+       },
+     ],
+@@ -175,6 +178,97 @@ server.registerTool(
+   },
+ );
+ 
++// --- Paid tool: batch reliability — score up to 50 endpoints in one call ---
++server.registerTool(
++  'check_x402_reliability_batch',
++  {
++    title: 'Batch-check x402 endpoint reliability',
++    description:
++      'Paid (one small USDC payment via x402 on Algorand — $7 flat for up to 50 targets). Scores ' +
++      'many x402 endpoints in a single call: pass a list of URLs, get a reliability score for each. ' +
++      'Cheaper than checking each separately when you have a watchlist to vet before routing payments. ' +
++      'Requires the AVM_MNEMONIC environment variable on this server.',
++    inputSchema: {
++      targetUrls: z
++        .array(z.string().url())
++        .min(1)
++        .max(50)
++        .describe('Up to 50 x402 endpoint URLs to score in one paid call.'),
++    },
++  },
++  async ({ targetUrls }) => {
++    const mnemonic = process.env.AVM_MNEMONIC;
++    if (!mnemonic) {
++      return {
++        isError: true,
++        content: [
++          {
++            type: 'text',
++            text:
++              'AVM_MNEMONIC is not set. This tool pays for the scores via x402, so the MCP server needs the ' +
++              '25-word mnemonic of a funded, USDC-opted-in Algorand account in the AVM_MNEMONIC environment ' +
++              'variable. Add it to this server\'s "env" in your MCP client config and restart.',
++          },
++        ],
++      };
++    }
++
++    try {
++      const payingFetch = payingFetchFromMnemonic(mnemonic);
++      const res = await payingFetch(`${BASE_URL}/reliability/batch`, {
++        method: 'POST',
++        headers: { 'content-type': 'application/json' },
++        body: JSON.stringify({ targets: targetUrls }),
++      });
++
++      if (!res.ok) {
++        const body = await res.text().catch(() => '');
++        return {
++          isError: true,
++          content: [
++            { type: 'text', text: `Hosannaith batch request failed (HTTP ${res.status}): ${body || '(no body)'}` },
++          ],
++        };
++      }
++
++      const result = (await res.json()) as {
++        results: Array<{ status: string }>;
++        count: number;
++        requested: number;
++        capped: boolean;
++      };
++      const tally = result.results.reduce<Record<string, number>>((acc, r) => {
++        acc[r.status] = (acc[r.status] ?? 0) + 1;
++        return acc;
++      }, {});
++      const summary =
++        `Hosannaith batch: scored ${result.count} of ${result.requested}` +
++        (result.capped ? ' (capped at 50)' : '') +
++        ` — pass=${tally.pass ?? 0} degraded=${tally.degraded ?? 0} fail=${tally.fail ?? 0} unknown=${tally.unknown ?? 0}`;
++
++      return {
++        content: [
++          { type: 'text', text: summary },
++          { type: 'text', text: JSON.stringify(result, null, 2) },
++        ],
++      };
++    } catch (err) {
++      return {
++        isError: true,
++        content: [
++          {
++            type: 'text',
++            text:
++              'Failed to batch-score the endpoints: ' +
++              (err instanceof Error ? err.message : String(err)) +
++              '. Check that AVM_MNEMONIC is a funded, USDC-opted-in account.',
++          },
++        ],
++      };
++    }
++  },
++);
++
+ async function main(): Promise<void> {
+   const transport = new StdioServerTransport();
+   await server.connect(transport);
+diff --git a/sdk/typescript/README.md b/sdk/typescript/README.md
+index 365df69..f3e8157 100644
+--- a/sdk/typescript/README.md
++++ b/sdk/typescript/README.md
+@@ -7,10 +7,12 @@ route real USDC to it. The client handles the full x402 pay-per-call handshake f
+ ## Install
+ 
+ ```bash
+-pnpm add @x402/core @x402/fetch @x402/avm algosdk
+-# then drop index.ts into your project, or install this folder directly
++npm i hosannaith-client @x402/core @x402/fetch @x402/avm
+ ```
+ 
++The `@x402/*` packages are peer dependencies — install them alongside. `algosdk` is a regular
++dependency and is pulled in automatically.
++
+ ## Use
+ 
+ ```ts
+@@ -36,6 +38,24 @@ for (const url of endpoints) {
+ }
+ ```
+ 
++## Score a whole watchlist in one call (batch)
++
++Scoring many endpoints? One paid batch call ($7 flat) scores up to **50** at once, instead of 50
++separate payments. Monitored targets return a full score; a target with no history yet comes back
++`unknown` and is enrolled for monitoring.
++
++```ts
++import { getReliabilityBatch } from 'hosannaith-client';
++
++const batch = await getReliabilityBatch(
++  ['https://a.example/x402', 'https://b.example/x402', 'https://c.example/x402'],
++  { mnemonic: process.env.AVM_MNEMONIC! },
++);
++
++console.log(`${batch.count} scored`);
++const trustworthy = batch.results.filter((r) => r.status === 'pass').map((r) => r.target);
++```
++
+ ## Guard every payment automatically
+ 
+ Don't want to remember to check? Wrap your paying fetch once, and every endpoint is vetted
+@@ -51,18 +71,21 @@ const safe = wrapFetchWithReliabilityGuard(paying, {
+   mnemonic: process.env.AVM_MNEMONIC!,   // funds the reliability checks
+   minScore: 90,                          // refuse anything below this
+   // mode: 'warn',                       // or just log and proceed (default: 'block')
++  // cacheTtlMs: 15 * 60 * 1000,         // reuse a score for 15 min (default)
+   onDecision: (d) => console.log(`[guard] ${d.url}: ${d.reason}`),
+ });
+ 
+-// Every call is checked, then paid. A failing endpoint throws ReliabilityGuardError
+-// (in block mode) before a cent leaves your wallet.
++// From here on, every call is checked, then paid. A failing endpoint throws
++// ReliabilityGuardError (in block mode) before a cent leaves your wallet.
+ await safe('https://some-x402-endpoint/api');
+ ```
+ 
+ Options: `minScore` (default 90), `mode` (`'block'` | `'warn'`, default `'block'`), `cacheTtlMs`
+-(default 15 min), `onUnknown`/`onError` (default `'allow'` — an oracle outage never breaks your
+-payments), `shouldGuard`, and `onDecision`. The guard's checks are paid via x402, so `mnemonic`
+-must be a funded, USDC-opted-in account.
++(default 15 min), `onUnknown`/`onError` (`'allow'` | `'block'` — both default `'allow'`, so an
++oracle outage never breaks your payments), `shouldGuard` (filter which requests to check), and
++`onDecision` (observe every verdict — handy for metrics or chaining another check like identity).
++
++The guard's own checks are paid via x402, so `mnemonic` must be a funded, USDC-opted-in account.
+ 
+ ## What you get back
+ 
+diff --git a/sdk/typescript/index.ts b/sdk/typescript/index.ts
+index 855be08..8eaf62b 100644
+--- a/sdk/typescript/index.ts
++++ b/sdk/typescript/index.ts
+@@ -40,6 +40,26 @@ export interface ReliabilityResult {
+   observedAt: string;
+ }
+ 
++/** One endpoint's result inside a batch. Mirrors ReliabilityResult, but `confidence` may also be
++ *  'pending' — a target with no history yet, now enrolled for monitoring. */
++export interface BatchItemResult {
++  target: string;
++  checkId: string;
++  status: 'pass' | 'degraded' | 'fail' | 'unknown';
++  score: number | null;
++  detail: { confidence?: 'history' | 'one-shot' | 'pending'; [k: string]: unknown };
++  observedAt: string;
++}
++
++/** Return shape of getReliabilityBatch. */
++export interface BatchReliabilityResult {
++  results: BatchItemResult[];
++  count: number; // how many were scored (after dedupe + the 50 cap)
++  requested: number; // how many you sent
++  capped: boolean; // true if you sent more than the cap
++  observedAt: string;
++}
++
+ export interface HosannaithOptions {
+   /** 25-word Algorand (algo25) mnemonic of the account that pays. Keep it secret — never commit it. */
+   mnemonic: string;
+@@ -95,6 +115,25 @@ export class HosannaithClient {
+     }
+     return (await res.json()) as ReliabilityResult;
+   }
++
++  /** Pay once and score up to 50 endpoints in a single batch call ($7 flat). Targets with no
++   *  monitoring history yet come back `unknown` and are enrolled for ongoing monitoring. */
++  async getReliabilityBatch(targets: string[]): Promise<BatchReliabilityResult> {
++    if (!Array.isArray(targets) || targets.length === 0) {
++      throw new Error('getReliabilityBatch: `targets` must be a non-empty array of URLs.');
++    }
++    const payingFetch = this.getPayingFetch();
++    const res = await payingFetch(`${this.baseUrl}/reliability/batch`, {
++      method: 'POST',
++      headers: { 'content-type': 'application/json' },
++      body: JSON.stringify({ targets }),
++    });
++    if (!res.ok) {
++      const body = await res.text().catch(() => '');
++      throw new Error(`Hosannaith batch request failed (HTTP ${res.status}): ${body || '(no body)'}`);
++    }
++    return (await res.json()) as BatchReliabilityResult;
++  }
+ }
+ 
+ /** One-shot convenience helper: builds a client and makes a single call. */
+@@ -105,6 +144,14 @@ export async function getReliability(
+   return new HosannaithClient(opts).getReliability(targetUrl);
+ }
+ 
++/** One-shot batch helper: builds a client and scores many endpoints in one paid call. */
++export async function getReliabilityBatch(
++  targets: string[],
++  opts: HosannaithOptions,
++): Promise<BatchReliabilityResult> {
++  return new HosannaithClient(opts).getReliabilityBatch(targets);
++}
++
+ // ---------------------------------------------------------------------------
+ // Reliability guard — vet an x402 endpoint BEFORE you pay it.
+ //
+diff --git a/sdk/typescript/package.json b/sdk/typescript/package.json
+index beec7ee..bf5b308 100644
+--- a/sdk/typescript/package.json
++++ b/sdk/typescript/package.json
+@@ -1,10 +1,18 @@
+ {
+   "name": "hosannaith-client",
+-  "version": "0.2.0",
++  "version": "0.3.0",
+   "type": "module",
+   "description": "Tiny client for the Hosannaith x402 reliability oracle on Algorand — pay-per-call endpoint reliability scores.",
+   "keywords": ["x402", "algorand", "oracle", "reliability", "usdc", "agentic-payments"],
+   "license": "MIT",
++  "author": "Cameron Vickers",
++  "homepage": "https://hosannaith.com",
++  "repository": {
++    "type": "git",
++    "url": "git+https://github.com/cameron4316/x402-oracle-server.git",
++    "directory": "sdk/typescript"
++  },
++  "bugs": "https://github.com/cameron4316/x402-oracle-server/issues",
+   "main": "index.ts",
+   "exports": { ".": "./index.ts" },
+   "scripts": {
+-- 
+2.43.0
+

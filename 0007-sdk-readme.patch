@@ -1,0 +1,42 @@
+From bd66bd038d9353370a74a518ac02686aa77c2d01 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 10:37:04 -0600
+Subject: [PATCH] docs(sdk): fix stale price + lead README with the guard
+
+- Requirements said each check cost ~$0.01; it's $1.00 ($7.00 for a batch of
+  up to 50). Correct the price on the SDK's npm/GitHub landing page.
+- Add a guard-first TL;DR at the top so the one-wrap adoption hook leads.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ sdk/typescript/README.md | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/sdk/typescript/README.md b/sdk/typescript/README.md
+index f3e8157..87e29c2 100644
+--- a/sdk/typescript/README.md
++++ b/sdk/typescript/README.md
+@@ -4,6 +4,10 @@ A tiny client for the **Hosannaith x402 reliability oracle** on Algorand. Get a
+ reliability score (uptime, correct-402 behaviour, latency) for any x402 endpoint — before you
+ route real USDC to it. The client handles the full x402 pay-per-call handshake for you.
+ 
++> **TL;DR** — stop paying dead endpoints. Wrap your x402 paying fetch once and every endpoint is
++> vetted before a cent moves: `wrapFetchWithReliabilityGuard(payingFetch, { mnemonic, minScore })`.
++> [Jump to the guard ↓](#guard-every-payment-automatically)
++
+ ## Install
+ 
+ ```bash
+@@ -110,7 +114,7 @@ for a target queried for the first time (a single live probe, `score: null`).
+ 
+ ## Requirements
+ 
+-- An Algorand **MainNet** account funded with a little USDC (each call costs ~$0.01) and ALGO for fees.
++- An Algorand **MainNet** account funded with USDC (each check is $1.00, or $7.00 for a batch of up to 50) and ALGO for fees.
+ - Its **25-word** mnemonic, passed as `mnemonic`. **Never commit it** — load it from an env var or a secret store.
+ 
+ Live service: https://hosannaith.com · Endpoint: `https://api.hosannaith.com/reliability?target=<url>`
+-- 
+2.43.0
+

@@ -1,0 +1,30 @@
+From 7ccaf7a2d7258ade26a5431d9a1a961db07f5bb5 Mon Sep 17 00:00:00 2001
+From: cameron4316 <326220627+cameron4316@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 08:44:44 -0600
+Subject: [PATCH] chore: declare MIT license in the root package.json
+
+The repo already carries an MIT LICENSE file; mirror it in the root
+package.json's "license" field so tools (incl. Glama's license detection)
+that read package.json metadata recognize it, matching mcp/ and sdk/.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01SazAweXpNUp8EDw2G9eBqH
+---
+ package.json | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/package.json b/package.json
+index ecb9185..7db5378 100644
+--- a/package.json
++++ b/package.json
+@@ -4,6 +4,7 @@
+   "private": true,
+   "type": "module",
+   "description": "x402 reliability oracle for Algorand — pluggable check architecture (reliability now, compliance later).",
++  "license": "MIT",
+   "scripts": {
+     "monitor": "tsx src/monitor.ts",
+     "dev": "tsx watch src/index.ts",
+-- 
+2.43.0
+

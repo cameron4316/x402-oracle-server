@@ -14,7 +14,7 @@ export interface ReliabilitySummary {
   observations: number;
   windowHours: number;
   uptimePct: number | null; // % of probes reachable
-  correct402Pct: number | null; // % of probes that correctly demanded payment
+  correct402Pct: number | null; // % of gating-determinate probes (402 vs 2xx) that returned 402; null when none were determinate
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
   score: number | null; // 0-100 composite; null when not enough data to stand behind
@@ -28,10 +28,22 @@ const MIN_OBSERVATIONS = 5;
 export function summarize(obs: Observation[], windowHours: number): ReliabilitySummary {
   if (obs.length === 0) return emptySummary(windowHours);
 
-  const reachable = obs.filter((o) => o.reachable);
-  const uptimePct = pct(reachable.length, obs.length);
-  const correct402Pct = pct(obs.filter((o) => o.demandedPayment).length, obs.length);
-  const latencies = reachable
+  // Uptime = the endpoint is serving: reachable AND not a server error. A 4xx still means the
+  // server answered (a 402 is itself a 4xx), so it counts as up; unreachable or 5xx counts as down.
+  const serving = obs.filter((o) => o.reachable && o.httpStatus != null && o.httpStatus < 500);
+  const uptimePct = pct(serving.length, obs.length);
+
+  // Correct-402 is only meaningful on probes where the endpoint actually made a gating decision:
+  //   402  -> correctly demanded payment (gated)
+  //   2xx  -> served an unpaid request (NOT gated) — a real failure for a payable resource
+  //   everything else (400 needs-input, 401/403 auth, 404/405, 429, 5xx, unreachable) is
+  //   INDETERMINATE: a param-less probe couldn't elicit a paywall decision, so it is excluded
+  //   rather than counted as a 402 failure — otherwise a healthy endpoint that requires valid
+  //   input (returns 400 to our probe) would be wrongly scored as misbehaving.
+  const gated = obs.filter((o) => o.httpStatus === 402).length;
+  const ungated = obs.filter((o) => o.httpStatus != null && o.httpStatus >= 200 && o.httpStatus < 300).length;
+  const correct402Pct = pct(gated, gated + ungated); // null when there is no determinate signal
+  const latencies = serving
     .map((o) => o.latencyMs)
     .filter((n): n is number => typeof n === 'number')
     .sort((a, b) => a - b);

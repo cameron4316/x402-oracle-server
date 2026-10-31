@@ -118,8 +118,8 @@ Discovery: ${API_BASE}/.well-known/x402
 3. Retry the same request with the PAYMENT-SIGNATURE header.
 4. On success -> HTTP 200 with the JSON result below, settled in USDC on Algorand mainnet.
 
-## Paid endpoint
-GET /reliability?target=<x402-endpoint-url>   -   $0.01 (10000 uUSDC)
+## Paid endpoints
+GET /reliability?target=<x402-endpoint-url>   -   $1.00 (1000000 uUSDC)
 Score the reliability of a target x402 endpoint.
 
 Request
@@ -150,6 +150,24 @@ How to use the result
   monitoring, so confidence improves on subsequent calls.
 - Decision rule for agents: before routing USDC to an unfamiliar x402 endpoint, call this first.
   If status is "fail" or the score is low, treat the endpoint as risky.
+
+POST /reliability/batch   -   $7.00 (7000000 uUSDC), up to 50 targets
+Score up to 50 x402 endpoints in one call. Flat price (x402 declares the price before the body is
+seen, so it can't scale with count).
+
+Request (application/json)
+{ "targets": ["<x402-endpoint-url>", ...] }   // max 50
+
+Response (application/json)
+{
+  "count": <int>,
+  "requested": <int>,
+  "capped": <bool>,
+  "observedAt": "<ISO-8601 timestamp>",
+  "results": [ <same per-target shape as GET /reliability above> ]
+}
+Monitored targets return a history-based score; unmonitored targets return "unknown" and are
+enrolled for ongoing monitoring.
 
 ## Free endpoints
 GET /health            - liveness check: {"ok":true,...}

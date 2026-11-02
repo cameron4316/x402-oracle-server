@@ -125,4 +125,6 @@ Add to `~/.cursor/mcp.json` (or the project's `.cursor/mcp.json`):
 
 ## License
 
-MIT © Cameron Vickers
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).
+
+Earlier releases were published under the MIT License and remain available under its terms: `hosannaith-mcp` 0.2.1 and earlier.

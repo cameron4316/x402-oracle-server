@@ -1,0 +1,71 @@
+name: CI
+
+# Runs on every pull request and on pushes to main. Read-only: no secrets, no deploys, no publishing.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server (typecheck, tests, licenses)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Dependency licenses (production)
+        run: pnpm licenses list --prod --json | node scripts/check-licenses.mjs
+
+  sdk:
+    name: hosannaith-client (typecheck, licenses)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - name: Dependency licenses (production)
+        run: pnpm licenses list --prod --json | node ../../scripts/check-licenses.mjs
+
+  mcp:
+    name: hosannaith-mcp (build, licenses)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # hosannaith-mcp has no committed lockfile yet, so CI resolves fresh within package.json ranges.
+      - run: pnpm install --ignore-workspace --no-frozen-lockfile
+      - run: pnpm run build
+      - name: Dependency licenses (production)
+        run: pnpm licenses list --prod --json --ignore-workspace | node ../scripts/check-licenses.mjs

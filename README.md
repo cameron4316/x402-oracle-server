@@ -200,3 +200,11 @@ Challenge.
   `@x402/hono`; the Algorand discovery/Bazaar package `@x402-avm/extensions` versions separately,
   currently `^2.6.1` — run `pnpm ls` for exact resolved versions).
 - Run `pnpm typecheck` after `pnpm install` to catch any API drift if you bump dependency versions.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).
+
+This repository was previously MIT-licensed. Code and npm releases published under MIT before the
+change (`hosannaith-client` 0.3.0 and earlier, `hosannaith-mcp` 0.2.1 and earlier) remain
+available under the MIT License.

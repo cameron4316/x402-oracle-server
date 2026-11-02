@@ -118,3 +118,9 @@ for a target queried for the first time (a single live probe, `score: null`).
 - Its **25-word** mnemonic, passed as `mnemonic`. **Never commit it** — load it from an env var or a secret store.
 
 Live service: https://hosannaith.com · Endpoint: `https://api.hosannaith.com/reliability?target=<url>`
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).
+
+Earlier releases were published under the MIT License and remain available under its terms: `hosannaith-client` 0.3.0 and earlier.

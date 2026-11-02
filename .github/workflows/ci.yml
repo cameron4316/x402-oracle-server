@@ -30,6 +30,20 @@ jobs:
       - run: pnpm test
       - name: Dependency licenses (production)
         run: pnpm licenses list --prod --json | node scripts/check-licenses.mjs
+      # Boots the real API on TESTNET settings (zero address as payTo; nothing is ever paid) and
+      # checks it over HTTP: contract routes, Problem Details, and that unpaid paid-route calls
+      # still get a 402. Needs the public GoPlausible testnet facilitator for the 402 checks.
+      - name: HTTP smoke test (testnet config, unpaid)
+        env:
+          NETWORK: testnet
+          AVM_ADDRESS: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
+          PORT: '4021'
+          MONITOR_TARGETS: ''
+          OBSERVATION_LOG: ${{ runner.temp }}/smoke/observations.jsonl
+        run: |
+          pnpm start > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4021/health > /dev/null && break; sleep 1; done
+          node scripts/smoke-free-routes.mjs http://localhost:4021 || { echo '--- server log ---'; cat "$RUNNER_TEMP/server.log"; exit 1; }
 
   sdk:
     name: hosannaith-client (typecheck, licenses)

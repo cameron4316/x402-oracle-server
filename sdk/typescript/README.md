@@ -104,10 +104,19 @@ The guard's own checks are paid via x402, so `mnemonic` must be a funded, USDC-o
     "correct402Pct": 100,
     "p50LatencyMs": 88,
     "p95LatencyMs": 127,
-    "confidence": "history"
+    "p99LatencyMs": 210,
+    "confidence": "history",
+    "availability_pct": 100,
+    "error_rate_pct": 0,
+    "protocol_conformance_pct": 100,
+    "score_normalized": 0.987
   }
 }
 ```
+
+`availability_pct`, `error_rate_pct`, `protocol_conformance_pct` and `score_normalized` are the
+same measurements in OpenEAGO SLO terms; see the
+[field reference](https://github.com/cameron4316/x402-oracle-server#reading-the-result).
 
 `confidence` is `"history"` when the score is backed by accumulated monitoring, or `"one-shot"`
 for a target queried for the first time (a single live probe, `score: null`).

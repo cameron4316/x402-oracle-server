@@ -16,14 +16,27 @@ export interface ReliabilitySummary {
   uptimePct: number | null; // % of probes reachable
   correct402Pct: number | null; // % of gating-determinate probes (402 vs 2xx) that returned 402; null when none were determinate
   p50LatencyMs: number | null;
-  p95LatencyMs: number | null;
+  p95LatencyMs: number | null; // equals the slowest sample when there are fewer than 20 latency samples
+  p99LatencyMs: number | null; // null below MIN_SAMPLES_FOR_P99 latency samples (see below)
   score: number | null; // 0-100 composite; null when not enough data to stand behind
   firstObservedAt: string | null;
   lastObservedAt: string | null;
+
+  // --- OpenEAGO SLO vocabulary (additive aliases; the fields above keep their names and meaning) ---
+  availability_pct: number | null; // = uptimePct
+  error_rate_pct: number | null; // = 100 - uptimePct: % of probes that were 5xx or unreachable
+  protocol_conformance_pct: number | null; // = correct402Pct
+  score_normalized: number | null; // = score / 100, in [0, 1]
 }
 
 // Don't emit a score we can't stand behind. Tune as your history grows.
 const MIN_OBSERVATIONS = 5;
+
+// p99 of fewer than 20 samples is just the slowest sample, so one slow probe would become "p99" and
+// an SLO gate could act on it. Below this many latency samples p99 is null. p95 is deliberately NOT
+// gated the same way: it is score-bearing and already live, so changing it would silently move
+// existing scores. Its low-count behaviour (it equals the slowest sample below 20) is documented.
+export const MIN_SAMPLES_FOR_P99 = 20;
 
 export function summarize(obs: Observation[], windowHours: number): ReliabilitySummary {
   if (obs.length === 0) return emptySummary(windowHours);
@@ -49,6 +62,7 @@ export function summarize(obs: Observation[], windowHours: number): ReliabilityS
     .sort((a, b) => a - b);
   const p50 = percentile(latencies, 50);
   const p95 = percentile(latencies, 95);
+  const p99 = latencies.length >= MIN_SAMPLES_FOR_P99 ? percentile(latencies, 99) : null;
 
   let score: number | null = null;
   if (obs.length >= MIN_OBSERVATIONS && uptimePct !== null && correct402Pct !== null) {
@@ -64,9 +78,26 @@ export function summarize(obs: Observation[], windowHours: number): ReliabilityS
     correct402Pct,
     p50LatencyMs: p50,
     p95LatencyMs: p95,
+    p99LatencyMs: p99,
     score,
     firstObservedAt: obs[0]?.at ?? null,
     lastObservedAt: obs[obs.length - 1]?.at ?? null,
+    ...sloAliases(uptimePct, correct402Pct, score),
+  };
+}
+
+// OpenEAGO SLO view of the same numbers. Pure aliases: no new measurement, null-preserving.
+//   availability_pct          share of probes where the endpoint was serving (reachable and not 5xx)
+//   error_rate_pct            share of probes that were 5xx or unreachable. Client-side 4xx are not
+//                             errors here: for an unpaid probe they are indeterminate, not failures.
+//   protocol_conformance_pct  share of gating-determinate probes (402 vs unpaid 2xx) that returned 402
+//   score_normalized          the 0-100 composite score rescaled to [0, 1]
+function sloAliases(uptimePct: number | null, correct402Pct: number | null, score: number | null) {
+  return {
+    availability_pct: uptimePct,
+    error_rate_pct: uptimePct === null ? null : round1(100 - uptimePct),
+    protocol_conformance_pct: correct402Pct,
+    score_normalized: score === null ? null : Math.round(score * 10) / 1000,
   };
 }
 
@@ -78,13 +109,16 @@ function emptySummary(windowHours: number): ReliabilitySummary {
     correct402Pct: null,
     p50LatencyMs: null,
     p95LatencyMs: null,
+    p99LatencyMs: null,
     score: null,
     firstObservedAt: null,
     lastObservedAt: null,
+    ...sloAliases(null, null, null),
   };
 }
 
 const pct = (n: number, d: number): number | null => (d === 0 ? null : Math.round((n / d) * 1000) / 10);
+const round1 = (v: number): number => Math.round(v * 10) / 10;
 const clamp = (lo: number, hi: number, v: number): number => Math.max(lo, Math.min(hi, v));
 function percentile(sorted: number[], p: number): number | null {
   if (sorted.length === 0) return null;

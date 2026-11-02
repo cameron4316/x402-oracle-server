@@ -1,0 +1,54 @@
+name: x402 conformance (CDP validator)
+
+# Manual only. Asks the Coinbase CDP facilitator's public validator to probe our live paid routes:
+# an UNPAID request, read-only, no payment and no indexing. Prints the full JSON result to the log
+# and keeps it as a downloadable artifact for docs/conformance/.
+#
+# Expect preflight checks (reachable, returns_402, has_bazaar_extension, parse) to pass and the
+# overall `valid` to be false: `valid` also requires that the CDP facilitator would index the
+# resource, and CDP does not settle Algorand. See docs/conformance/README.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: reliability
+            resource: https://api.hosannaith.com/reliability
+            method: GET
+          - name: reliability-batch
+            resource: https://api.hosannaith.com/reliability/batch
+            method: POST
+    steps:
+      - name: Validate ${{ matrix.method }} ${{ matrix.resource }}
+        env:
+          RESOURCE: ${{ matrix.resource }}
+          METHOD: ${{ matrix.method }}
+          NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          body=$(jq -n --arg r "$RESOURCE" --arg m "$METHOD" '{resource: $r, method: $m}')
+          code=$(curl -sS -m 60 -o "cdp-validate-$NAME.json" -w '%{http_code}' \
+            -X POST https://api.cdp.coinbase.com/platform/v2/x402/validate \
+            -H 'Content-Type: application/json' -d "$body")
+          echo "HTTP $code from the CDP validator"
+          jq --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg r "$RESOURCE" --arg m "$METHOD" \
+            '{checkedAt: $at, resource: $r, method: $m, response: .}' "cdp-validate-$NAME.json" > "result-$NAME.json"
+          echo '----- preflight -----'
+          jq -r '.response.preflight[]? | "\(.check): \(if .passed then "PASS" else "FAIL" end) (\(.severity)) \(.detail // "")"' "result-$NAME.json"
+          echo '----- summary -----'
+          jq '{valid: .response.valid, statusCode: .response.statusCode, x402Version: .response.x402Version, simulation: .response.simulation}' "result-$NAME.json"
+          echo '----- full result -----'
+          cat "result-$NAME.json"
+          test "$code" = 200
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cdp-validate-${{ matrix.name }}
+          path: result-${{ matrix.name }}.json

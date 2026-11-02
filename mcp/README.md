@@ -21,7 +21,7 @@ A score looks like:
 {
   "target": "https://api.example.com/resource",
   "status": "pass",
-  "score": 97,
+  "score": 95.8,
   "detail": {
     "observations": 142,
     "windowHours": 24,
@@ -29,7 +29,12 @@ A score looks like:
     "correct402Pct": 100,
     "p50LatencyMs": 180,
     "p95LatencyMs": 420,
-    "confidence": "history"
+    "p99LatencyMs": 610,
+    "confidence": "history",
+    "availability_pct": 100,
+    "error_rate_pct": 0,
+    "protocol_conformance_pct": 100,
+    "score_normalized": 0.958
   },
   "observedAt": "2026-10-14T00:00:00.000Z"
 }
@@ -38,6 +43,7 @@ A score looks like:
 - `status`: `pass` (score ≥90) · `degraded` (60–89) · `fail` (<60) · `unknown` (too little data)
 - `score`: 0–100, or `null` when there isn't enough history to stand behind a number
 - `detail.confidence`: `history` (scored from accrued observations) · `one-shot` (only one live probe — treat cautiously)
+- `detail.availability_pct`, `error_rate_pct`, `protocol_conformance_pct`, `score_normalized`: the same measurements in OpenEAGO SLO terms ([field reference](https://github.com/cameron4316/x402-oracle-server#reading-the-result))
 
 ## Install
 

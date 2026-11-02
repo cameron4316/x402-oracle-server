@@ -130,3 +130,20 @@ test('re-querying a one-shot target later reads its new history instead of probi
   assert.equal(secondResult.detail.confidence, 'history');
   assert.equal(secondResult.score, null, 'still below MIN_OBSERVATIONS, but now history-backed');
 });
+
+test('real check results (one-shot and history) match the published JSON Schema', async () => {
+  const { checkResultSchema } = await import('../../src/contract/schema.js');
+  const { validate } = await import('../contract/mini-schema.js');
+
+  const fetchMock = mockFetch(402);
+  const oneShot = await reliabilityCheck.run('https://contract.example/one-shot');
+  fetchMock.restore();
+  assert.deepEqual(validate(checkResultSchema, oneShot), []);
+
+  const target = 'https://contract.example/history';
+  seedHistory(target, 30);
+  const withHistory = await reliabilityCheck.run(target);
+  assert.deepEqual(validate(checkResultSchema, withHistory), []);
+  assert.equal((withHistory.detail as { availability_pct: number }).availability_pct, 100);
+  assert.equal(typeof (withHistory.detail as { p99LatencyMs: unknown }).p99LatencyMs, 'number');
+});

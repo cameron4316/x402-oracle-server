@@ -41,10 +41,46 @@ USDC on Algorand via the GoPlausible facilitator and return JSON like:
     "correct402Pct": 100,
     "p50LatencyMs": 88,
     "p95LatencyMs": 127,
-    "confidence": "history"
+    "p99LatencyMs": 210,
+    "confidence": "history",
+    "availability_pct": 100,
+    "error_rate_pct": 0,
+    "protocol_conformance_pct": 100,
+    "score_normalized": 0.987
   }
 }
 ```
+
+### Reading the result
+
+| Field | Meaning |
+|---|---|
+| `status` | `pass` (score ≥ 90) · `degraded` (60–89) · `fail` (< 60) · `unknown` (not enough data) |
+| `score` | 0–100 composite: 0.6 × uptime + 0.4 × correct-402 − a latency penalty (up to 20). `null` below 5 observations. |
+| `uptimePct` | Probes where the endpoint was serving: reachable and not a 5xx. |
+| `correct402Pct` | Of the probes where the endpoint made a payment decision (a `402`, or serving an unpaid `2xx`), the share that correctly answered `402`. Other `4xx` (e.g. a `400` because our probe sends no input) are indeterminate and excluded. `null` if no probe was determinate. |
+| `p50/p95/p99LatencyMs` | Latency percentiles of serving probes. `p99LatencyMs` is `null` below 20 samples (it would just be the slowest one); below 20 samples `p95LatencyMs` equals the slowest sample. |
+| `confidence` | `history` (accumulated monitoring) · `one-shot` (first sighting, one live probe, `score: null`) · `pending` (batch only: no history yet, now enrolled). |
+
+### OpenEAGO SLO view
+
+The same numbers in the SLO vocabulary used by agent registries and SLA/SLO feasibility checks.
+These are pure aliases (no new measurement) and are `null` exactly when their source is `null`.
+
+| SLO term | Field | Definition |
+|---|---|---|
+| availability | `availability_pct` | = `uptimePct` |
+| error rate | `error_rate_pct` | = 100 − `uptimePct`: % of probes that were 5xx or unreachable (server-side errors). Client-side 4xx are indeterminate for an unpaid probe and are not counted. |
+| protocol conformance | `protocol_conformance_pct` | = `correct402Pct`: % of gating-determinate probes that returned 402 rather than serving unpaid 2xx. |
+| latency | `p50LatencyMs`, `p95LatencyMs`, `p99LatencyMs` | as above |
+| registry score | `score_normalized` + `confidence` | `score` / 100, in [0, 1] |
+
+### Machine-readable contract
+
+- [`/openapi.json`](https://api.hosannaith.com/openapi.json): OpenAPI 3.1 description of every route, with each paid route's x402 terms in `x-x402`.
+- JSON Schemas (draft 2020-12): [`/schema/check-result.json`](https://api.hosannaith.com/schema/check-result.json), [`/schema/batch-result.json`](https://api.hosannaith.com/schema/batch-result.json), [`/schema/problem.json`](https://api.hosannaith.com/schema/problem.json).
+- Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details (`application/problem+json`). The `402 Payment Required` response is the x402 protocol's own.
+- Timestamps are RFC 3339 in UTC. Responses are additive-only: new optional fields may appear; existing fields never change name, type or meaning.
 
 ## Use it in your own code
 

@@ -21,14 +21,26 @@ const DEFAULT_BASE_URL = 'https://api.hosannaith.com';
 export interface ReliabilityDetail {
   observations: number;
   windowHours: number;
-  uptimePct: number | null; // % of probes reachable
-  correct402Pct: number | null; // % of probes that correctly demanded payment
+  uptimePct: number | null; // % of probes where the endpoint was serving (reachable and not 5xx)
+  correct402Pct: number | null; // % of gating-determinate probes (402 vs unpaid 2xx) that returned 402
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
+  /** null until there are at least 20 latency samples (below that, p99 would just be the max). */
+  p99LatencyMs?: number | null;
   score: number | null;
   firstObservedAt: string | null;
   lastObservedAt: string | null;
   confidence: 'history' | 'one-shot';
+  // OpenEAGO SLO vocabulary: aliases of the fields above, null when their source is null.
+  // Optional so this client keeps working against an oracle that predates them.
+  /** = uptimePct */
+  availability_pct?: number | null;
+  /** = 100 - uptimePct: % of probes that were 5xx or unreachable (client-side 4xx are not errors). */
+  error_rate_pct?: number | null;
+  /** = correct402Pct: % of gating-determinate probes that returned 402 rather than unpaid 2xx. */
+  protocol_conformance_pct?: number | null;
+  /** = score / 100, in [0, 1]. */
+  score_normalized?: number | null;
 }
 
 export interface ReliabilityResult {

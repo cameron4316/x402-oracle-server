@@ -1,4 +1,5 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { serve } from '@hono/node-server';
 import { paymentMiddleware, x402ResourceServer } from '@x402/hono';
 import { HTTPFacilitatorClient } from '@x402/core/server';
@@ -9,7 +10,10 @@ import { bazaarResourceServerExtension } from '@x402-avm/extensions';
 import { CONFIG } from './config.js';
 import { routes } from './routes.config.js';
 import { getCheck } from './checks/registry.js';
-import { reliabilityBatch } from './checks/reliability/batch.js';
+import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
+import { PUBLISHED_SCHEMAS } from './contract/schema.js';
+import { buildOpenApi, type PaidRouteLike } from './contract/openapi.js';
+import { PROBLEM_CONTENT_TYPE, problem } from './contract/problem.js';
 
 // --- x402 resource server wiring (mirrors the official Algorand tutorial) ---
 const facilitatorClient = new HTTPFacilitatorClient({ url: CONFIG.facilitatorUrl });
@@ -19,6 +23,24 @@ server.registerExtension(bazaarResourceServerExtension as unknown as ResourceSer
 
 const app = new Hono();
 
+// Our own error bodies are RFC 9457 Problem Details (application/problem+json).
+function problemResponse(c: Context, status: 400 | 404 | 500, detail?: string) {
+  return c.body(JSON.stringify(problem(status, detail)), status, { 'Content-Type': PROBLEM_CONTENT_TYPE });
+}
+
+// Unhandled errors -> 500 Problem Details. Any error that carries its own response (an
+// HTTPException, possibly from another copy of hono inside a dependency) keeps that exact response,
+// matching hono's default handler, so this never reshapes anything the payment middleware returns.
+app.onError((err, c) => {
+  if (err instanceof HTTPException || 'getResponse' in err) {
+    const res = (err as HTTPException).getResponse();
+    return c.newResponse(res.body, res);
+  }
+  console.error('[hosannaith] unhandled error:', err);
+  return problemResponse(c, 500);
+});
+app.notFound((c) => problemResponse(c, 404, `No route for ${c.req.method} ${c.req.path}`));
+
 // Payment gate for the declared paid routes.
 app.use(paymentMiddleware(routes, server));
 
@@ -26,10 +48,10 @@ app.use(paymentMiddleware(routes, server));
 app.get('/reliability', async (c) => {
   const target = c.req.query('target');
   if (!target) {
-    return c.json({ error: 'Missing required query param: target' }, 400);
+    return problemResponse(c, 400, 'Missing required query param: target');
   }
   const check = getCheck('reliability');
-  if (!check) return c.json({ error: 'reliability check not registered' }, 500);
+  if (!check) return problemResponse(c, 500, 'reliability check not registered');
   const result = await check.run(target);
   return c.json(result);
 });
@@ -42,11 +64,11 @@ app.post('/reliability/batch', async (c) => {
   try {
     body = await c.req.json();
   } catch {
-    return c.json({ error: 'Expected a JSON body: { "targets": ["<endpoint-url>", ...] }' }, 400);
+    return problemResponse(c, 400, 'Expected a JSON body: { "targets": ["<endpoint-url>", ...] }');
   }
   const targets = (body as { targets?: unknown } | null)?.targets;
   if (!Array.isArray(targets)) {
-    return c.json({ error: 'Body must be { "targets": ["<endpoint-url>", ...] }' }, 400);
+    return problemResponse(c, 400, 'Body must be { "targets": ["<endpoint-url>", ...] }');
   }
   const result = await reliabilityBatch(targets);
   return c.json(result);
@@ -88,6 +110,17 @@ function wellKnownX402() {
   };
 }
 app.get('/.well-known/x402', (c) => c.json(wellKnownX402()));
+
+// --- Machine-readable contract (free, unpaid): OpenAPI 3.1 + JSON Schemas of every response shape ---
+const openApiDoc = buildOpenApi(routes as unknown as Record<string, PaidRouteLike>, { maxBatchTargets: MAX_BATCH_TARGETS });
+app.get('/openapi.json', (c) => c.json(openApiDoc));
+app.get('/schema/:name{[a-z-]+\\.json}', (c) => {
+  const name = c.req.param('name').replace(/\.json$/, '');
+  // Own-property check: names like "constructor" match the pattern but are not schemas.
+  if (!Object.hasOwn(PUBLISHED_SCHEMAS, name)) return problemResponse(c, 404, `No schema named ${name}`);
+  const schema = PUBLISHED_SCHEMAS[name as keyof typeof PUBLISHED_SCHEMAS];
+  return c.body(JSON.stringify(schema), 200, { 'Content-Type': 'application/schema+json' });
+});
 
 // Agent-facing guide (served as text/plain): what this is, how to pay it, how to read the result.
 app.get('/llms.txt', (c) =>
@@ -138,10 +171,25 @@ Response (application/json)
     "correct402Pct": <number 0-100 | null>,
     "p50LatencyMs": <int | null>,
     "p95LatencyMs": <int | null>,
-    "confidence": "history" | "one-shot"
+    "p99LatencyMs": <int | null>,
+    "confidence": "history" | "one-shot",
+    "availability_pct": <number 0-100 | null>,
+    "error_rate_pct": <number 0-100 | null>,
+    "protocol_conformance_pct": <number 0-100 | null>,
+    "score_normalized": <number 0-1 | null>
   },
-  "observedAt": "<ISO-8601 timestamp>"
+  "observedAt": "<RFC 3339 UTC timestamp>"
 }
+
+Field notes
+- uptimePct: probes where the endpoint was serving (reachable and not 5xx).
+- correct402Pct: of probes where the endpoint made a payment decision (402, or an unpaid 2xx),
+  the share that answered 402. Other 4xx are indeterminate for an unpaid probe and excluded.
+- p99LatencyMs is null below 20 latency samples; below 20 samples p95LatencyMs is the slowest one.
+- OpenEAGO SLO aliases (same numbers, null when their source is null):
+  availability_pct = uptimePct; error_rate_pct = 100 - uptimePct (5xx or unreachable);
+  protocol_conformance_pct = correct402Pct; score_normalized = score / 100.
+- Responses are additive-only: new optional fields may appear; existing ones never change.
 
 How to use the result
 - status: pass = score >= 90, degraded = 60-89, fail = < 60, unknown = not enough data yet.
@@ -163,17 +211,26 @@ Response (application/json)
   "count": <int>,
   "requested": <int>,
   "capped": <bool>,
-  "observedAt": "<ISO-8601 timestamp>",
+  "observedAt": "<RFC 3339 UTC timestamp>",
   "results": [ <same per-target shape as GET /reliability above> ]
 }
 Monitored targets return a history-based score; unmonitored targets return "unknown" and are
 enrolled for ongoing monitoring.
 
 ## Free endpoints
-GET /health            - liveness check: {"ok":true,...}
-GET /                  - service info (send Accept: application/json for JSON)
-GET /.well-known/x402  - machine-readable discovery document
-GET /llms.txt          - this file
+GET /health                     - liveness check: {"ok":true,...}
+GET /                           - service info (send Accept: application/json for JSON)
+GET /.well-known/x402           - machine-readable discovery document
+GET /openapi.json               - OpenAPI 3.1 description (paid terms in each operation's x-x402)
+GET /schema/check-result.json   - JSON Schema of a reliability result
+GET /schema/batch-result.json   - JSON Schema of a batch result
+GET /schema/problem.json        - JSON Schema of an error body
+GET /llms.txt                   - this file
+
+## Errors
+Errors from this server are RFC 9457 Problem Details (application/problem+json):
+{ "type": "about:blank", "title": "Bad Request", "status": 400, "detail": "...", "error": "..." }
+The 402 Payment Required response is the x402 protocol's own (see "How to pay").
 `),
 );
 

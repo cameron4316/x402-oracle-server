@@ -1,0 +1,150 @@
+// Machine-readable contract for Hosannaith's responses: JSON Schema (draft 2020-12) for the
+// reliability result shapes and for error bodies (RFC 9457 Problem Details).
+//
+// These schemas describe what the code in src/checks/reliability/ actually returns, and
+// test/contract.test.ts validates real outputs against them so the two cannot drift silently.
+// The response shapes are additive-only: new optional fields may appear (so objects allow
+// additional properties); existing fields never change name, type or meaning.
+
+const API_BASE = 'https://api.hosannaith.com';
+const SCHEMA_DIALECT = 'https://json-schema.org/draft/2020-12/schema';
+
+// RFC 3339 timestamp in UTC with a literal "Z" (what Date.prototype.toISOString produces).
+const timestampUtc = {
+  type: 'string',
+  format: 'date-time',
+  pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$',
+} as const;
+
+const percent = (description: string) => ({
+  type: ['number', 'null'],
+  minimum: 0,
+  maximum: 100,
+  description,
+});
+
+const latencyMs = (description: string) => ({
+  type: ['integer', 'null'],
+  minimum: 0,
+  description,
+});
+
+export const reliabilityDetailSchema = {
+  type: 'object',
+  description:
+    'Supporting statistics for a reliability result. For a batch target with no history yet ' +
+    '(confidence "pending") only observations, windowHours and confidence are present.',
+  required: ['observations', 'windowHours', 'confidence'],
+  properties: {
+    observations: { type: 'integer', minimum: 0, description: 'Probes in the scoring window.' },
+    windowHours: { type: 'number', exclusiveMinimum: 0, description: 'Length of the scoring window.' },
+    confidence: {
+      enum: ['history', 'one-shot', 'pending'],
+      description:
+        '"history": scored from accumulated monitoring. "one-shot": first sighting, one live probe ' +
+        '(score is null). "pending": batch only; no history yet, now enrolled for monitoring.',
+    },
+    uptimePct: percent('Probes where the endpoint was serving (reachable and not 5xx), in percent.'),
+    correct402Pct: percent(
+      'Gating-determinate probes (402 vs unpaid 2xx) that returned 402, in percent. Null when no probe ' +
+        'was determinate; other 4xx are indeterminate for an unpaid probe and excluded.',
+    ),
+    p50LatencyMs: latencyMs('Median latency of serving probes.'),
+    p95LatencyMs: latencyMs(
+      '95th percentile latency of serving probes. With fewer than 20 samples it equals the slowest sample.',
+    ),
+    p99LatencyMs: latencyMs('99th percentile latency of serving probes. Null below 20 latency samples.'),
+    score: { type: ['number', 'null'], minimum: 0, maximum: 100, description: 'Same as the top-level score.' },
+    firstObservedAt: { anyOf: [timestampUtc, { type: 'null' }], description: 'Oldest probe in the window.' },
+    lastObservedAt: { anyOf: [timestampUtc, { type: 'null' }], description: 'Newest probe in the window.' },
+    availability_pct: percent('OpenEAGO SLO alias of uptimePct.'),
+    error_rate_pct: percent(
+      'OpenEAGO SLO view: 100 - uptimePct, the share of probes that were 5xx or unreachable. ' +
+        'Client-side 4xx are not counted as errors: for an unpaid probe they are indeterminate.',
+    ),
+    protocol_conformance_pct: percent('OpenEAGO SLO alias of correct402Pct.'),
+    score_normalized: {
+      type: ['number', 'null'],
+      minimum: 0,
+      maximum: 1,
+      description: 'The 0-100 score rescaled to [0, 1] (score / 100).',
+    },
+  },
+} as const;
+
+const checkResultBody = {
+  type: 'object',
+  required: ['target', 'checkId', 'status', 'score', 'detail', 'observedAt'],
+  properties: {
+    target: { type: 'string', description: 'The endpoint URL that was scored, as requested.' },
+    checkId: { const: 'reliability' },
+    status: {
+      enum: ['pass', 'degraded', 'fail', 'unknown'],
+      description: 'pass: score >= 90. degraded: 60-89. fail: < 60. unknown: not enough data to score.',
+    },
+    score: {
+      type: ['number', 'null'],
+      minimum: 0,
+      maximum: 100,
+      description: '0-100 composite (0.6 uptime + 0.4 correct-402 - latency penalty); null below 5 observations.',
+    },
+    detail: reliabilityDetailSchema,
+    observedAt: { ...timestampUtc, description: 'When this result was computed.' },
+  },
+} as const;
+
+export const checkResultSchema = {
+  $schema: SCHEMA_DIALECT,
+  $id: `${API_BASE}/schema/check-result.json`,
+  title: 'Hosannaith reliability result',
+  description: 'Response of GET /reliability and of each item in POST /reliability/batch results.',
+  ...checkResultBody,
+} as const;
+
+export const batchResultSchema = {
+  $schema: SCHEMA_DIALECT,
+  $id: `${API_BASE}/schema/batch-result.json`,
+  title: 'Hosannaith batch reliability result',
+  description: 'Response of POST /reliability/batch.',
+  type: 'object',
+  required: ['results', 'count', 'requested', 'capped', 'observedAt'],
+  properties: {
+    results: { type: 'array', items: checkResultBody },
+    count: { type: 'integer', minimum: 0, description: 'Targets scored, after dedupe and the cap.' },
+    requested: { type: 'integer', minimum: 0, description: 'Targets sent by the caller.' },
+    capped: { type: 'boolean', description: 'True when more targets were sent than the cap allows.' },
+    observedAt: timestampUtc,
+  },
+} as const;
+
+// RFC 9457 Problem Details. `error` repeats `detail` for clients written against the earlier
+// { "error": "..." } bodies.
+export const problemSchema = {
+  $schema: SCHEMA_DIALECT,
+  $id: `${API_BASE}/schema/problem.json`,
+  title: 'Problem Details (RFC 9457)',
+  type: 'object',
+  required: ['type', 'title', 'status'],
+  properties: {
+    type: { type: 'string', description: 'Problem type URI; "about:blank" means the HTTP status says it all.' },
+    title: { type: 'string' },
+    status: { type: 'integer', minimum: 400, maximum: 599 },
+    detail: { type: 'string' },
+    instance: { type: 'string' },
+    error: { type: 'string', description: 'Legacy alias of detail.' },
+  },
+} as const;
+
+// Served at /schema/<name>.json
+export const PUBLISHED_SCHEMAS = {
+  'check-result': checkResultSchema,
+  'batch-result': batchResultSchema,
+  problem: problemSchema,
+} as const;
+
+// A copy suitable for embedding under OpenAPI components (no $schema / $id, which would reset the
+// base URI inside the OpenAPI document).
+export function embeddable(schema: Record<string, unknown>): Record<string, unknown> {
+  const { $schema: _s, $id: _i, ...rest } = schema;
+  return rest;
+}

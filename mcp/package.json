@@ -5,7 +5,7 @@
   "type": "module",
   "description": "MCP server for the Hosannaith x402 reliability oracle on Algorand — gives any MCP agent a check_x402_reliability tool to vet an endpoint before paying it.",
   "keywords": ["mcp", "model-context-protocol", "x402", "algorand", "reliability", "oracle", "agentic-payments"],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Cameron Vickers",
   "homepage": "https://hosannaith.com",
   "repository": {
@@ -17,7 +17,7 @@
   "bin": {
     "hosannaith-mcp": "dist/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": ["dist", "README.md", "LICENSE", "NOTICE"],
   "engines": {
     "node": ">=18"
   },

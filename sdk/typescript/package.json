@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Tiny client for the Hosannaith x402 reliability oracle on Algorand — pay-per-call endpoint reliability scores.",
   "keywords": ["x402", "algorand", "oracle", "reliability", "usdc", "agentic-payments"],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": "Cameron Vickers",
   "homepage": "https://hosannaith.com",
   "repository": {

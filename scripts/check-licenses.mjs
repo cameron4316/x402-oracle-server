@@ -20,6 +20,15 @@ const ALLOWED = new Set([
   'BlueOak-1.0.0',
 ]);
 
+// Packages whose package.json omits or mangles the license field, so pnpm reports them as
+// "Unknown", but whose shipped LICENSE file was read and confirmed by hand. Keyed by exact
+// name@version: a new version is "Unknown" again until someone re-reads its LICENSE.
+export const REVIEWED = new Map([
+  // Standard MIT text, "Copyright (c) 2013 Odysseas Tsatalos and oDesk Corporation"; package.json
+  // has no license field. Transitive via siwe. Reviewed 2026-11-02 (CI log of PR #8).
+  ['valid-url@1.0.9', 'MIT'],
+]);
+
 // Minimal SPDX expression evaluator: identifiers, AND, OR, parentheses, "WITH <exception>".
 export function allowed(expr, allow = ALLOWED) {
   const tokens = String(expr)
@@ -79,14 +88,23 @@ async function main() {
   let count = 0;
   for (const [license, pkgs] of Object.entries(byLicense)) {
     let ok;
+    let unreadable = license === 'Unknown';
     try {
       ok = allowed(license);
     } catch {
       ok = false;
+      unreadable = true;
     }
     for (const p of pkgs) {
       count++;
-      if (!ok) bad.push(`${p.name}@${(p.versions ?? [p.version]).join(',')}: ${license}`);
+      if (ok) continue;
+      const versions = p.versions ?? [p.version];
+      // A hand review can only stand in for an unreadable license, never override a declared one.
+      const reviewed = unreadable && versions.every((v) => {
+        const r = REVIEWED.get(`${p.name}@${v}`);
+        return r !== undefined && allowed(r);
+      });
+      if (!reviewed) bad.push(`${p.name}@${versions.join(',')}: ${license}`);
     }
   }
   if (bad.length) {

@@ -89,7 +89,19 @@ await check('GET /reliability (unpaid) -> 402 with PAYMENT-REQUIRED header', asy
   expect(res.headers.get('payment-required'), 'no PAYMENT-REQUIRED header');
 });
 
-await check('POST /reliability/batch (unpaid) -> 402 with PAYMENT-REQUIRED header', async () => {
+// Decodes the x402 v2 PAYMENT-REQUIRED header (base64 JSON).
+function paymentRequired(res) {
+  return JSON.parse(Buffer.from(res.headers.get('payment-required') ?? '', 'base64').toString('utf8'));
+}
+
+await check('402 for GET /reliability: https resource URL + `target` declared for discovery', async () => {
+  const pr = paymentRequired(await get('/reliability'));
+  expect(/^https:\/\/[^/]+\/reliability$/.test(pr.resource?.url ?? ''), `resource.url ${pr.resource?.url}`);
+  const input = pr.extensions?.bazaar?.info?.input ?? {};
+  expect(typeof input.queryParams?.target === 'string', `queryParams ${JSON.stringify(input.queryParams)}`);
+});
+
+await check('POST /reliability/batch (unpaid) -> 402: https resource URL + JSON body declared', async () => {
   const res = await get('/reliability/batch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -97,6 +109,10 @@ await check('POST /reliability/batch (unpaid) -> 402 with PAYMENT-REQUIRED heade
   });
   expect(res.status === 402, `status ${res.status}`);
   expect(res.headers.get('payment-required'), 'no PAYMENT-REQUIRED header');
+  const pr = paymentRequired(res);
+  expect(/^https:\/\/[^/]+\/reliability\/batch$/.test(pr.resource?.url ?? ''), `resource.url ${pr.resource?.url}`);
+  const input = pr.extensions?.bazaar?.info?.input ?? {};
+  expect(input.bodyType === 'json' && Array.isArray(input.body?.targets), `input ${JSON.stringify(input)}`);
 });
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

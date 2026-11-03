@@ -1,12 +1,28 @@
 import { declareDiscoveryExtension } from '@x402-avm/extensions';
 import { CONFIG } from './config.js';
 
+// Max targets per batch call. Duplicated from checks/reliability/batch.ts (MAX_BATCH_TARGETS) on
+// purpose: importing it would pull the observation store into this config module. A test asserts
+// the two stay equal.
+export const BATCH_TARGET_LIMIT = 50;
+
+const EXAMPLE_TARGET = 'https://x402.goplausible.xyz/examples/weather';
+
+// What the caller sends, for Bazaar discovery. GET routes describe query parameters; POST routes
+// describe a JSON body (`bodyType` marks a body route; without it the route is declared as query-only).
+type DiscoveryInput =
+  | { kind: 'query'; example: Record<string, unknown>; schema: Record<string, unknown> }
+  | { kind: 'json-body'; example: Record<string, unknown>; schema: Record<string, unknown> };
+
 // One helper so every paid route is declared identically. The compliance route will reuse it unchanged.
 function paidRoute(opts: {
+  path: string; // public path, e.g. '/reliability'
   description: string;
+  input: DiscoveryInput;
   exampleOutput: Record<string, unknown>;
   price?: string;
 }) {
+  const output = { example: opts.exampleOutput };
   return {
     accepts: [
       {
@@ -20,9 +36,15 @@ function paidRoute(opts: {
         extra: { asset: CONFIG.usdcAsaId, tag: CONFIG.competitionTag },
       },
     ],
+    // Fixed public https URL. Payment matching compares only the `accepts` terms, never this URL,
+    // so it does not affect verification; it is what clients and the Bazaar catalog see.
+    resource: `${CONFIG.publicBaseUrl}${opts.path}`,
     description: opts.description,
     mimeType: 'application/json',
-    extensions: declareDiscoveryExtension({ output: { example: opts.exampleOutput } }),
+    extensions:
+      opts.input.kind === 'json-body'
+        ? declareDiscoveryExtension({ bodyType: 'json', input: opts.input.example, inputSchema: opts.input.schema, output })
+        : declareDiscoveryExtension({ input: opts.input.example, inputSchema: opts.input.schema, output }),
   };
 }
 
@@ -30,6 +52,18 @@ function paidRoute(opts: {
 // Add the compliance route here later; it reuses paidRoute() with no changes to the plumbing.
 export const routes = {
   'GET /reliability': paidRoute({
+    path: '/reliability',
+    input: {
+      kind: 'query',
+      example: { target: EXAMPLE_TARGET },
+      schema: {
+        properties: {
+          target: { type: 'string', format: 'uri', description: 'Full URL of the x402 endpoint to score.' },
+        },
+        required: ['target'],
+        additionalProperties: false,
+      },
+    },
     description:
       'Reliability score (0-100) for a given x402 endpoint: uptime, correct 402 behaviour, and ' +
       'latency percentiles from continuous independent monitoring. Pass ?target=<endpoint-url>.',
@@ -59,7 +93,26 @@ export const routes = {
   // Batch tier: score up to 50 endpoints in one paid call. Flat price (x402 declares price before
   // the body is seen, so it can't scale with count); history-only (see checks/reliability/batch.ts).
   'POST /reliability/batch': paidRoute({
+    path: '/reliability/batch',
     price: '$7.00',
+    input: {
+      kind: 'json-body',
+      example: { targets: [EXAMPLE_TARGET] },
+      schema: {
+        type: 'object',
+        properties: {
+          targets: {
+            type: 'array',
+            items: { type: 'string', format: 'uri' },
+            minItems: 1,
+            maxItems: BATCH_TARGET_LIMIT,
+            description: `Endpoint URLs to score. Duplicates are removed; at most ${BATCH_TARGET_LIMIT} are scored.`,
+          },
+        },
+        required: ['targets'],
+        additionalProperties: false,
+      },
+    },
     description:
       'Reliability scores for up to 50 x402 endpoints in one call. POST JSON body ' +
       '{"targets":["<endpoint-url>", ...]}. Returns a results array (same per-target shape as ' +

@@ -68,6 +68,9 @@ export const CONFIG = {
   avmAddress: requireEnv('AVM_ADDRESS'),
   facilitatorUrl: process.env.FACILITATOR_URL ?? 'https://facilitator.goplausible.xyz',
   port: Number(process.env.PORT ?? 4021),
+  // Public HTTPS origin of the API. Used as each paid route's x402 `resource.url`: TLS terminates at
+  // nginx, so the URL the app sees on a request is http://, which is not what clients reach.
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://api.hosannaith.com').replace(/\/+$/, ''),
   // Remote x402-gated MCP server (src/mcp-remote.ts) — its own process/port, isolated from the API.
   mcpRemotePort: Number(process.env.MCP_REMOTE_PORT ?? 4022),
   // Competition tag added to each route's `extra` so activity is attributed to the Challenge.

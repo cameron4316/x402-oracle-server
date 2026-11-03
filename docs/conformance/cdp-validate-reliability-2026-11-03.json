@@ -1,0 +1,397 @@
+{
+  "checkedAt": "2026-11-03T15:37:09Z",
+  "resource": "https://api.hosannaith.com/reliability",
+  "method": "GET",
+  "response": {
+    "bazaarExtension": {
+      "info": {
+        "input": {
+          "method": "GET",
+          "queryParams": {
+            "target": "https://x402.goplausible.xyz/examples/weather"
+          },
+          "type": "http"
+        },
+        "output": {
+          "example": {
+            "checkId": "reliability",
+            "detail": {
+              "availability_pct": 99.9,
+              "confidence": "history",
+              "correct402Pct": 100,
+              "error_rate_pct": 0.1,
+              "observations": 1440,
+              "p50LatencyMs": 120,
+              "p95LatencyMs": 240,
+              "p99LatencyMs": 410,
+              "protocol_conformance_pct": 100,
+              "score_normalized": 0.985,
+              "uptimePct": 99.9,
+              "windowHours": 24
+            },
+            "observedAt": "2026-09-08T00:00:00.000Z",
+            "score": 98.5,
+            "status": "pass",
+            "target": "https://example.com/some-x402-endpoint"
+          },
+          "type": "json"
+        }
+      },
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "input": {
+            "additionalProperties": false,
+            "properties": {
+              "method": {
+                "enum": [
+                  "GET"
+                ],
+                "type": "string"
+              },
+              "queryParams": {
+                "additionalProperties": false,
+                "properties": {
+                  "target": {
+                    "description": "Full URL of the x402 endpoint to score.",
+                    "format": "uri",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target"
+                ],
+                "type": "object"
+              },
+              "type": {
+                "const": "http",
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "method"
+            ],
+            "type": "object"
+          },
+          "output": {
+            "properties": {
+              "example": {
+                "type": "object"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "type": "object"
+      }
+    },
+    "index": null,
+    "paymentRequirements": {
+      "x402Version": 2,
+      "error": "Payment required",
+      "resource": {
+        "url": "https://api.hosannaith.com/reliability",
+        "description": "Reliability score (0-100) for a given x402 endpoint: uptime, correct 402 behaviour, and latency percentiles from continuous independent monitoring. Pass ?target=<endpoint-url>.",
+        "mimeType": "application/json"
+      },
+      "accepts": [
+        {
+          "scheme": "exact",
+          "network": "algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=",
+          "amount": "1000000",
+          "asset": "31566704",
+          "payTo": "BEACJLUDOSVMS6SUQEUAHWRI4VAAX7G4CVFOL3DWH2R4XHTLXT6VG5TFYU",
+          "maxTimeoutSeconds": 300,
+          "extra": {
+            "asset": 31566704,
+            "tag": "x402-global-challenge",
+            "feePayer": "ZMFK2OI7ZBD2U27ISERZC4S6LKM6WMFJPZQ4MYNJDZ2VNBNMBA67RA22AA"
+          }
+        }
+      ],
+      "extensions": {
+        "bazaar": {
+          "info": {
+            "input": {
+              "type": "http",
+              "queryParams": {
+                "target": "https://x402.goplausible.xyz/examples/weather"
+              },
+              "method": "GET"
+            },
+            "output": {
+              "type": "json",
+              "example": {
+                "target": "https://example.com/some-x402-endpoint",
+                "checkId": "reliability",
+                "status": "pass",
+                "score": 98.5,
+                "detail": {
+                  "observations": 1440,
+                  "windowHours": 24,
+                  "uptimePct": 99.9,
+                  "correct402Pct": 100,
+                  "p50LatencyMs": 120,
+                  "p95LatencyMs": 240,
+                  "p99LatencyMs": 410,
+                  "confidence": "history",
+                  "availability_pct": 99.9,
+                  "error_rate_pct": 0.1,
+                  "protocol_conformance_pct": 100,
+                  "score_normalized": 0.985
+                },
+                "observedAt": "2026-09-08T00:00:00.000Z"
+              }
+            }
+          },
+          "schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "http"
+                  },
+                  "method": {
+                    "type": "string",
+                    "enum": [
+                      "GET"
+                    ]
+                  },
+                  "queryParams": {
+                    "type": "object",
+                    "properties": {
+                      "target": {
+                        "type": "string",
+                        "format": "uri",
+                        "description": "Full URL of the x402 endpoint to score."
+                      }
+                    },
+                    "required": [
+                      "target"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "type",
+                  "method"
+                ],
+                "additionalProperties": false
+              },
+              "output": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "example": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            },
+            "required": [
+              "input"
+            ]
+          }
+        }
+      }
+    },
+    "preflight": [
+      {
+        "check": "url_valid",
+        "detail": "URL is well-formed",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "https",
+        "check": "url_https",
+        "detail": "Resource URL uses HTTPS",
+        "expected": "https",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "endpoint_reachable",
+        "detail": "Endpoint responded with status 402",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "402",
+        "check": "returns_402",
+        "detail": "Endpoint correctly returns HTTP 402 Payment Required",
+        "expected": "402",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "valid_json",
+        "detail": "Response body parsed as JSON",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "2",
+        "check": "x402_version",
+        "detail": "x402 version is 2",
+        "expected": "2",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "PAYMENT-REQUIRED header",
+        "check": "payment_required_header",
+        "detail": "PaymentRequired delivered via the PAYMENT-REQUIRED response header",
+        "expected": "PaymentRequired delivered via PAYMENT-REQUIRED response header",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "has_accepts",
+        "detail": "Found 1 payment method(s) in accepts array",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "exact",
+        "check": "accepts[0].scheme",
+        "detail": "Scheme is exact",
+        "expected": "exact or upto",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=",
+        "check": "accepts[0].network",
+        "detail": "Network \"algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=\" is not supported",
+        "expected": "a facilitator-supported network (Base, Solana, Polygon, Arbitrum, World, Monad)",
+        "passed": false,
+        "severity": "required"
+      },
+      {
+        "actual": "31566704",
+        "check": "accepts[0].asset",
+        "detail": "Asset \"31566704\" is not USDC",
+        "passed": false,
+        "severity": "required"
+      },
+      {
+        "actual": "1000000",
+        "check": "accepts[0].amount",
+        "detail": "Amount 1000000 meets $0.001 USDC minimum",
+        "expected": ">= 1000",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "BEACJLUDOSVMS6SUQEUAHWRI4VAAX7G4CVFOL3DWH2R4XHTLXT6VG5TFYU",
+        "check": "accepts[0].payTo",
+        "detail": "Missing or invalid payTo address",
+        "passed": false,
+        "severity": "required"
+      },
+      {
+        "check": "accepts[0].maxTimeoutSeconds",
+        "detail": "maxTimeoutSeconds is set",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "has_resource",
+        "detail": "Resource URL: https://api.hosannaith.com/reliability",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "has_bazaar_extension",
+        "detail": "Bazaar extension found",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "bazaar.info",
+        "detail": "Bazaar info block present",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "bazaar.info.input",
+        "detail": "Input metadata present in bazaar info",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "http",
+        "check": "bazaar.info.input.type",
+        "detail": "Input type is \"http\"",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "GET",
+        "check": "bazaar.info.input.method",
+        "detail": "HTTP method is \"GET\"",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "actual": "GET",
+        "check": "bazaar.info.input.method.matches_request",
+        "detail": "Declared method GET matches the probed method",
+        "expected": "GET",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "bazaar.info.output",
+        "detail": "Output metadata present in bazaar info",
+        "passed": true,
+        "severity": "advisory"
+      },
+      {
+        "check": "bazaar.info.output.example",
+        "detail": "Output example provided",
+        "passed": true,
+        "severity": "advisory"
+      },
+      {
+        "check": "bazaar.schema",
+        "detail": "Bazaar schema present",
+        "passed": true,
+        "severity": "required"
+      },
+      {
+        "check": "parse",
+        "detail": "failed to unmarshal v2 payment required: network \"algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=\" must be in CAIP-2 format (e.g., 'eip155:84532')",
+        "passed": false,
+        "severity": "required"
+      }
+    ],
+    "simulation": {
+      "outcome": "rejected",
+      "rejectionReason": "invalid discovery configuration"
+    },
+    "statusCode": 402,
+    "valid": false,
+    "x402Version": 2
+  }
+}

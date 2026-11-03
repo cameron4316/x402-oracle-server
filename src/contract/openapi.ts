@@ -81,7 +81,9 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
         '(uptime, correct 402 behaviour, latency percentiles) so an agent can decide whether to trust ' +
         'an endpoint before paying it. Paid operations settle in USDC on Algorand mainnet via x402; ' +
         'their payment terms are in each operation\'s "x-x402" extension. Response objects are ' +
-        'additive-only: new optional fields may appear; existing fields never change.',
+        'additive-only: new optional fields may appear; existing fields never change. When signing is ' +
+        'enabled, every result carries spec_version, generated_at and an ES256 signature verifiable ' +
+        'against /.well-known/hosannaith-keys.json (see docs/attestation.md).',
       license: { name: 'Apache-2.0', identifier: 'Apache-2.0' },
       contact: { url: 'https://hosannaith.com' },
     },
@@ -157,6 +159,7 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
       },
       '/health': freeJson('Liveness check'),
       '/.well-known/x402': freeJson('x402 discovery document'),
+      '/.well-known/hosannaith-keys.json': freeJson('Public keys for verifying signed results (JWKS + revoked_keys)'),
       '/llms.txt': freeText('Agent-facing guide'),
       '/openapi.json': freeJson('This document'),
       '/schema/check-result.json': freeJson('JSON Schema of a reliability result'),

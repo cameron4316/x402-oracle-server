@@ -139,3 +139,20 @@ test('OpenAPI: payment terms come from the route config; every $ref resolves', (
   }
   for (const name of Object.keys(PUBLISHED_SCHEMAS)) assert.ok(`/schema/${name}.json` in doc.paths);
 });
+
+test('signed results and signed batches match the published schemas; every top-level field is documented', async () => {
+  const { generateKeyPairSync } = await import('node:crypto');
+  const { createSigner, attest, attestBatch } = await import('../../src/attest/sign.js');
+  const signer = createSigner(generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey);
+
+  const signed = attest(signer, SCENARIOS.healthy);
+  assert.deepEqual(validate(checkResultSchema, signed), []);
+  for (const k of Object.keys(signed)) assert.ok(k in checkResultSchema.properties, `undocumented field "${k}"`);
+
+  const batch = attestBatch(signer, { results: [SCENARIOS.healthy, SCENARIOS['one-shot']], count: 2, requested: 2, capped: false, observedAt: new Date().toISOString() });
+  assert.deepEqual(validate(batchResultSchema, batch), []);
+  for (const k of Object.keys(batch)) assert.ok(k in batchResultSchema.properties, `undocumented batch field "${k}"`);
+
+  assert.notDeepEqual(validate(checkResultSchema, { ...signed, signature: { ...signed.signature, sig: 'short' } }), []);
+  assert.notDeepEqual(validate(checkResultSchema, { ...signed, signature: { ...signed.signature, alg: 'none' } }), []);
+});

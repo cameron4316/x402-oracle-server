@@ -1,0 +1,5 @@
+{
+  "description": "Every Hosannaith attestation signing key, PUBLIC halves only. Served as /.well-known/hosannaith-keys.json. Retired keys stay forever so old attestations remain verifiable; revoked keys are removed from keys and listed in revoked_keys. See docs/attestation.md.",
+  "keys": [],
+  "revoked_keys": []
+}

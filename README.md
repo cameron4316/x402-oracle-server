@@ -81,6 +81,7 @@ These are pure aliases (no new measurement) and are `null` exactly when their so
 - JSON Schemas (draft 2020-12): [`/schema/check-result.json`](https://api.hosannaith.com/schema/check-result.json), [`/schema/batch-result.json`](https://api.hosannaith.com/schema/batch-result.json), [`/schema/problem.json`](https://api.hosannaith.com/schema/problem.json).
 - Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) Problem Details (`application/problem+json`). The `402 Payment Required` response is the x402 protocol's own.
 - Timestamps are RFC 3339 in UTC. Responses are additive-only: new optional fields may appear; existing fields never change name, type or meaning.
+- **Signed results:** when signing is enabled, every result (and every batch, as a whole) carries an ES256 signature over its RFC 8785 canonical JSON, verifiable against [`/.well-known/hosannaith-keys.json`](https://api.hosannaith.com/.well-known/hosannaith-keys.json). Format, verification and key policy: [`docs/attestation.md`](docs/attestation.md).
 
 ## Use it in your own code
 

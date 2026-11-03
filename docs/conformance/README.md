@@ -6,25 +6,39 @@ Independent checks that Hosannaith's own paid routes answer like well-formed x40
 
 [`POST https://api.cdp.coinbase.com/platform/v2/x402/validate`](https://docs.cdp.coinbase.com/api-reference/v2/rest-api/x402-facilitator/validate-x402-endpoint)
 is a public, unauthenticated, read-only probe run by Coinbase's CDP facilitator. It sends an
-unpaid request to the resource (no payment, no indexing) and reports four preflight checks:
+unpaid request to the resource (no payment, no indexing) and runs about 25 preflight checks on the
+402 response: transport, x402 v2 shape, the `accepts` entry, and Bazaar discovery metadata. The
+overall `valid` also requires that *the CDP facilitator* would index the resource.
 
-| Check | What it tests |
-|---|---|
-| `reachable` | The endpoint responded within the timeout. |
-| `returns_402` | The unpaid request was answered with HTTP 402. |
-| `parse` | The 402 payment requirements parse. |
-| `has_bazaar_extension` | The payment requirements carry the Bazaar discovery extension. |
+### Results, 2026-11-02 (both paid routes, identical outcome)
 
-**Expected result for Hosannaith:** all four preflight checks pass, and the overall `valid` is
-`false`. `valid` additionally requires that *the CDP facilitator* would index the resource
-(`simulation.outcome = accepted`). CDP does not settle Algorand, so it cannot accept a resource
-whose only payment option is Algorand USDC. That is a statement about CDP's catalog, not about
-x402 conformance.
+21 of 25 checks pass, including: endpoint reachable, HTTP 402, x402 version 2, payment
+requirements delivered in the `PAYMENT-REQUIRED` header, `exact` scheme, amount, timeout, and the
+full Bazaar extension (info, input, method matches the probed method, output example, schema).
 
-**`has_bazaar_extension` is recorded here but is not part of how Hosannaith scores other
-endpoints.** The extension is optional discovery metadata; many correctly gated, payable
-endpoints omit it. Hosannaith's definition of a valid 402 is about gating and payability, not
-catalog listing.
+The 4 that fail, and why:
+
+| Check | Result | Cause |
+|---|---|---|
+| `accepts[0].network` | not supported | CDP does not settle Algorand. Expected. |
+| `accepts[0].asset` | "31566704 is not USDC" | CDP recognises its own chains' USDC contracts, not Algorand ASA 31566704 (which is Circle's USDC on Algorand). Expected, same cause. |
+| `accepts[0].payTo` | invalid address | CDP validates its own chains' address formats, not Algorand's. Expected, same cause. |
+| `parse` | network "must be in CAIP-2 format" | **Real, and known.** We advertise the network as `algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=` because that is the legacy form the GoPlausible facilitator still requires in order to settle. It is not valid CAIP-2 (a CAIP-2 reference is at most 32 characters from `[-_a-zA-Z0-9]`). The spec-correct form is the truncated one that `@x402/avm` exports. See the README section "Mainnet is live — the CAIP-2 override". This result is independent confirmation that the legacy form breaks standard x402 parsers. It is resolved by reverting the override once GoPlausible's facilitator accepts the spec-correct form. |
+
+Overall `valid: false`, `simulation.outcome: rejected` ("invalid discovery configuration").
+
+**`has_bazaar_extension` and the other Bazaar checks are recorded but are not part of how
+Hosannaith scores other endpoints.** The extension is optional discovery metadata; many correctly
+gated, payable endpoints omit it. Hosannaith's definition of a valid 402 is about gating and
+payability, not catalog listing.
+
+### Also observed in the recorded response
+
+- `resource.url` is `http://api.hosannaith.com/...`, not `https://`. TLS terminates at nginx, so
+  the app sees plain HTTP and the x402 middleware builds the URL from the request. The validator
+  passes it, but it should be `https://`. Tracked separately.
+- The Bazaar `input` block declares no query parameters, so `GET /reliability` does not advertise
+  its required `target` parameter to Bazaar-based discovery. Tracked separately.
 
 ## How to run
 

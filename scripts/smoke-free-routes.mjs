@@ -14,6 +14,32 @@ if (!/^https?:\/\//.test(base)) {
   process.exit(2);
 }
 
+// A server that was just restarted takes a few seconds to listen; until then a reverse proxy
+// answers 502. Wait (up to 30 s) for /health before checking, so a deploy-then-check sequence
+// doesn't report a false outage.
+async function waitForHealth(timeoutMs = 30_000) {
+  const deadline = Date.now() + timeoutMs;
+  let announced = false;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(base + '/health');
+      if (res.status === 200) return true;
+    } catch {
+      // not listening yet
+    }
+    if (!announced) {
+      console.log('waiting for the server to come up...');
+      announced = true;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+if (!(await waitForHealth())) {
+  console.log('FAIL  server did not answer /health with 200 within 30 s (is the service running?)');
+  process.exit(1);
+}
+
 let failures = 0;
 async function check(name, fn) {
   try {

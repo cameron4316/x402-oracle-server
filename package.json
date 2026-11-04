@@ -11,7 +11,8 @@
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"test/**/*.test.ts\"",
-    "mcp:remote": "tsx src/mcp-remote.ts"
+    "mcp:remote": "tsx src/mcp-remote.ts",
+    "report": "tsx src/report.ts"
   },
   "devDependencies": {
     "@types/node": "latest",

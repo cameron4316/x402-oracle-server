@@ -160,6 +160,17 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
       '/health': freeJson('Liveness check'),
       '/.well-known/x402': freeJson('x402 discovery document'),
       '/.well-known/hosannaith-keys.json': freeJson('Public keys for verifying signed results (JWKS + revoked_keys)'),
+      '/reports/{id}.json': {
+        get: {
+          summary: 'Signed, dated public reliability report',
+          tags: ['Discovery'],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }],
+          responses: {
+            '200': { description: 'Signed report (verify per docs/attestation.md).', content: { 'application/json': {} } },
+            '404': problemResponse('No such report.'),
+          },
+        },
+      },
       '/llms.txt': freeText('Agent-facing guide'),
       '/openapi.json': freeJson('This document'),
       '/schema/check-result.json': freeJson('JSON Schema of a reliability result'),

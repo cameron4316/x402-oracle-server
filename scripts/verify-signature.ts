@@ -50,7 +50,8 @@ async function main() {
     process.exit(v.ok ? 0 : 1);
   }
   const v = verifyAttestation(doc, keys);
-  console.log(`result (${doc?.target ?? '?'}): ${describe(v)}`);
+  const label = doc?.type === 'hosannaith.reliability-report' ? `report ${doc.id}` : `result (${doc?.target ?? '?'})`;
+  console.log(`${label}: ${describe(v)}`);
   process.exit(v.ok ? 0 : 1);
 }
 

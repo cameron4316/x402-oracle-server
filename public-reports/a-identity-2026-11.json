@@ -1,0 +1,74 @@
+{
+  "type": "hosannaith.reliability-report",
+  "id": "a-identity-2026-11",
+  "title": "Reliability report: A-Identity",
+  "subject": "A-Identity",
+  "scope": "Covers only the two A-Identity Algorand x402 endpoints listed below (pay_check and risk_check). It says nothing about A-Identity's other chains, products or endpoints.",
+  "window": {
+    "from": "2026-10-21T03:54:05.969Z",
+    "to": "2026-11-04T03:52:42.976Z",
+    "hours": 336
+  },
+  "method": "Independent, unpaid probes of each endpoint about every 3 minutes (mean interval 180 s). Uptime = probes where the endpoint was reachable and not a 5xx. Correct-402 = of the probes where the endpoint made a payment decision (402, or an unpaid 2xx), the share that correctly answered 402. Score = 0.6 x uptime + 0.4 x correct-402 - a latency penalty (up to 20). A sustained outage is 2+ consecutive failed probes. Full definitions: https://github.com/cameron4316/x402-oracle-server#reading-the-result",
+  "disclaimer": "An observational measurement of past behaviour over the stated window. It is not a guarantee of future availability or performance, and not an audit, certification or endorsement.",
+  "endpoints": [
+    {
+      "target": "https://a-identity.xyz/api/x402/algorand/tools/pay_check",
+      "status": "pass",
+      "score": 96,
+      "probes": 6719,
+      "uptimePct": 100,
+      "correct402Pct": 100,
+      "p50LatencyMs": 313,
+      "p95LatencyMs": 405,
+      "p99LatencyMs": 486,
+      "firstObservedAt": "2026-10-21T03:54:05.969Z",
+      "lastObservedAt": "2026-11-04T03:52:42.635Z",
+      "sustainedOutages": [],
+      "transientErrors": 0,
+      "latencySpikes": [
+        {
+          "at": "2026-10-28T17:41:21.259Z",
+          "latencyMs": 1536
+        }
+      ]
+    },
+    {
+      "target": "https://a-identity.xyz/api/x402/algorand/tools/risk_check",
+      "status": "pass",
+      "score": 96.5,
+      "probes": 6718,
+      "uptimePct": 100,
+      "correct402Pct": 100,
+      "p50LatencyMs": 207,
+      "p95LatencyMs": 354,
+      "p99LatencyMs": 422,
+      "firstObservedAt": "2026-10-21T03:57:16.329Z",
+      "lastObservedAt": "2026-11-04T03:52:42.976Z",
+      "sustainedOutages": [],
+      "transientErrors": 0,
+      "latencySpikes": [
+        {
+          "at": "2026-10-29T19:44:13.592Z",
+          "latencyMs": 2867
+        },
+        {
+          "at": "2026-11-04T01:52:46.568Z",
+          "latencyMs": 1577
+        }
+      ]
+    }
+  ],
+  "publisher": "Hosannaith (https://hosannaith.com)",
+  "verification": {
+    "keys": "https://api.hosannaith.com/.well-known/hosannaith-keys.json",
+    "instructions": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/attestation.md#verifying"
+  },
+  "spec_version": "1.0.0",
+  "generated_at": "2026-11-04T04:01:24.896Z",
+  "signature": {
+    "alg": "ES256",
+    "kid": "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k",
+    "sig": "lW0KkEHHHDg2JMQEQyTKNW62erk1HBmYvZMHCzYL56OVxWTY6xHkppMug6B4dEH8Fw2gecvOlNmtF0ZQMhi8Pg"
+  }
+}

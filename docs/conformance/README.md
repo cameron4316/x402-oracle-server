@@ -10,7 +10,7 @@ unpaid request to the resource (no payment, no indexing) and runs about 25 prefl
 402 response: transport, x402 v2 shape, the `accepts` entry, and Bazaar discovery metadata. The
 overall `valid` also requires that *the CDP facilitator* would index the resource.
 
-### Results, 2026-11-02 (both paid routes, identical outcome)
+### Results (both paid routes, identical outcome; first run 2026-11-02, re-run 2026-11-03)
 
 21 of 25 checks pass, including: endpoint reachable, HTTP 402, x402 version 2, payment
 requirements delivered in the `PAYMENT-REQUIRED` header, `exact` scheme, amount, timeout, and the
@@ -32,13 +32,16 @@ Hosannaith scores other endpoints.** The extension is optional discovery metadat
 gated, payable endpoints omit it. Hosannaith's definition of a valid 402 is about gating and
 payability, not catalog listing.
 
-### Also observed in the recorded response
+### Fixed after the first run
 
-- `resource.url` is `http://api.hosannaith.com/...`, not `https://`. TLS terminates at nginx, so
-  the app sees plain HTTP and the x402 middleware builds the URL from the request. The validator
-  passes it, but it should be `https://`. Tracked separately.
-- The Bazaar `input` block declares no query parameters, so `GET /reliability` does not advertise
-  its required `target` parameter to Bazaar-based discovery. Tracked separately.
+The 2026-11-02 responses also showed two discovery problems, fixed in PR #11 and confirmed by the
+2026-11-03 run (same 21/25, same four expected failures):
+
+| Issue (2026-11-02) | Now (2026-11-03) |
+|---|---|
+| `resource.url` was `http://api.hosannaith.com/...` (TLS terminates at the reverse proxy, so the app saw plain HTTP) | `https://api.hosannaith.com/reliability` and `/reliability/batch`, set per route |
+| `GET /reliability` declared no query parameters, so Bazaar discovery did not learn about the required `target` | `queryParams` declares `target` |
+| `POST /reliability/batch` was declared as a query route | declared as a JSON-body route with a `targets` array |
 
 ## How to run
 

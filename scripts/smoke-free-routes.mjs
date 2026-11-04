@@ -107,6 +107,10 @@ await check('GET /schema/constructor.json -> 404 Problem Details (no prototype l
   await expectProblem(await get('/schema/constructor.json'), 404);
 });
 
+await check('GET /reports/no-such-report.json -> 404 Problem Details', async () => {
+  await expectProblem(await get('/reports/no-such-report.json'), 404);
+});
+
 await check('GET /no-such-route -> 404 Problem Details', async () => {
   await expectProblem(await get('/no-such-route'), 404);
 });

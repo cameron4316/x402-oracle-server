@@ -97,6 +97,22 @@ Failure reasons reported by the reference verifier (`src/attest/verify.ts`): `si
 `malformed_signature`, `unsupported_alg`, `revoked_kid`, `unknown_kid`, `signature_invalid`. All of
 them mean "do not trust this result".
 
+## Signed public reports
+
+A public report is a dated, citable snapshot of Hosannaith's measurements for a named set of
+endpoints over a stated window: per endpoint score, uptime, correct-402, latency percentiles,
+sustained outages, transient errors and latency spikes, plus the method, scope and a disclaimer.
+It is signed with the same key and scheme as results, and `"type": "hosannaith.reliability-report"`
+distinguishes it from a result.
+
+- Served at `https://api.hosannaith.com/reports/<id>.json`, from `public-reports/` in this repo.
+- Never edited after publishing: a citation always points at the numbers it quoted. A newer report
+  gets a new id.
+- CI verifies every committed report against the published keys, so an unsigned or altered report
+  cannot be published.
+- Generated where the key is: `node_modules/.bin/tsx scripts/sign-report.ts --id <id> --subject <name>
+  --scope <text> <report-card.json>...` (report cards come from `pnpm report -- --target <url>`).
+
 ## Operating the signing key
 
 - The private key is generated **on the server that uses it** (`scripts/attest-keygen.ts`), written

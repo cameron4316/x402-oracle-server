@@ -7,8 +7,9 @@
 //   node scripts/sbom.mjs --package package.json --list list.json --licenses licenses.json > sbom.cdx.json
 //
 // Every production dependency (direct and transitive) becomes a component with its exact version,
-// npm purl and license, plus a dependency graph. Fails if a direct dependency from package.json is
-// missing from pnpm's tree, so an SBOM can never silently come out empty.
+// npm purl and license, plus a dependency graph. Fails if a direct dependency from package.json, or
+// any package pnpm lists licenses for, is missing from the tree, so an SBOM cannot silently come
+// out incomplete.
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
@@ -41,6 +42,9 @@ export function buildSbom({ pkg, list, licenses, timestamp = new Date().toISOStr
   const components = new Map(); // bom-ref -> component
   const graph = new Map(); // bom-ref -> Set(bom-ref)
 
+  // pnpm can print a repeated package without its children, so a package is expanded the first
+  // time it shows up WITH children, wherever that is.
+  const expanded = new Set();
   const walk = (deps, parentRef) => {
     for (const [name, d] of Object.entries(deps ?? {})) {
       const version = d?.version;
@@ -54,6 +58,9 @@ export function buildSbom({ pkg, list, licenses, timestamp = new Date().toISOStr
         if (l) c.licenses = l;
         components.set(ref, c);
         graph.set(ref, new Set());
+      }
+      if (!expanded.has(ref) && Object.keys(d.dependencies ?? {}).length) {
+        expanded.add(ref);
         walk(d.dependencies, ref);
       }
     }
@@ -64,6 +71,12 @@ export function buildSbom({ pkg, list, licenses, timestamp = new Date().toISOStr
   const direct = [...graph.get(rootRef)].map((ref) => components.get(ref).name);
   const missing = Object.keys(pkg.dependencies ?? {}).filter((n) => !direct.includes(n));
   if (missing.length) throw new Error(`sbom: direct dependencies missing from the pnpm tree: ${missing.join(', ')}`);
+  // Cross-check against pnpm's license listing, which covers the same production packages.
+  const unlisted = [...lic.keys()].filter((k) => {
+    const at = k.lastIndexOf('@');
+    return !components.has(purl(k.slice(0, at), k.slice(at + 1)));
+  });
+  if (unlisted.length) throw new Error(`sbom: packages in pnpm licenses but not in the tree: ${unlisted.join(', ')}`);
 
   const byRef = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   return {

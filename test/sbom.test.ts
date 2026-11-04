@@ -73,6 +73,30 @@ test('fails rather than emit an SBOM missing a direct dependency', () => {
   assert.equal(r.stdout, '');
 });
 
+test('a package repeated without its children is still expanded', () => {
+  const repeated = [
+    {
+      ...list[0],
+      dependencies: {
+        '@scope/a': { from: '@scope/a', version: '1.0.1' }, // printed bare first
+        b: { from: 'b', version: '2.4.0', dependencies: { '@scope/a': list[0].dependencies['@scope/a'] } },
+      },
+    },
+  ];
+  const r = run(pkg, repeated, licenses);
+  assert.equal(r.status, 0, r.stderr);
+  const sbom = JSON.parse(r.stdout);
+  assert.ok(sbom.components.some((c: { name: string }) => c.name === 'c'));
+  const deps = Object.fromEntries(sbom.dependencies.map((d: { ref: string; dependsOn: string[] }) => [d.ref, d.dependsOn]));
+  assert.deepEqual(deps['pkg:npm/%40scope/a@1.0.1'], ['pkg:npm/c@3.0.0']);
+});
+
+test('fails if pnpm lists a license for a package the tree does not have', () => {
+  const r = run(pkg, list, { ...licenses, ISC: [{ name: 'ghost', versions: ['9.9.9'], license: 'ISC' }] });
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /in pnpm licenses but not in the tree: ghost@9\.9\.9/);
+});
+
 test('fails on empty pnpm output', () => {
   const r = run(pkg, [], licenses);
   assert.notEqual(r.status, 0);

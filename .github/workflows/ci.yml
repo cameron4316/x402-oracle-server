@@ -102,3 +102,39 @@ jobs:
       - run: pnpm run build
       - name: Dependency licenses (production)
         run: pnpm licenses list --prod --json --ignore-workspace | node ../scripts/check-licenses.mjs
+
+  packages:
+    name: npm packages (dry run, SBOM)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [sdk/typescript, mcp]
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install --ignore-workspace --no-frozen-lockfile; fi
+      - run: pnpm run --if-present build
+      # The tarball must carry the license files and must not carry tests.
+      - name: What npm would publish
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const files = require(process.argv[1])[0].files.map((f) => f.path);
+            console.log(files.join("\n"));
+            for (const f of ["LICENSE", "NOTICE", "package.json", "README.md"]) if (!files.includes(f)) throw new Error("missing " + f);
+            if (files.some((f) => f.startsWith("test/") || f.endsWith(".test.ts"))) throw new Error("tests would be published");
+          ' "$RUNNER_TEMP/pack.json"
+      - name: SBOM (CycloneDX)
+        run: |
+          npx --yes @cyclonedx/cdxgen@11 -t js --required-only -o "$RUNNER_TEMP/sbom.cdx.json" .
+          node -e 'const s = require(process.argv[1]); console.log("SBOM components:", (s.components || []).length)' "$RUNNER_TEMP/sbom.cdx.json"
+

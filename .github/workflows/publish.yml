@@ -1,0 +1,115 @@
+name: Publish to npm
+
+# Stages one package per release tag, from GitHub Actions, using npm trusted publishing (OIDC):
+# no npm token is stored anywhere. The release is STAGED, not live: a maintainer reviews it and
+# approves it with 2FA on npmjs.com (or `npm stage approve <id>`) before anyone can install it.
+#
+#   tag hosannaith-client@<version>  publishes sdk/typescript
+#   tag hosannaith-mcp@<version>     publishes mcp
+#
+# The tag's version must equal the package version (and, for the MCP server, server.json).
+# Checks, the dependency license gate and an SBOM run first; any failure stops the release.
+# See docs/releasing.md.
+on:
+  push:
+    tags:
+      - 'hosannaith-client@*'
+      - 'hosannaith-mcp@*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # OIDC token for npm trusted publishing and provenance
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve the package from the tag
+        id: pkg
+        run: |
+          tag="$GITHUB_REF_NAME"
+          name="${tag%@*}"
+          version="${tag##*@}"
+          case "$name" in
+            hosannaith-client) dir=sdk/typescript ;;
+            hosannaith-mcp) dir=mcp ;;
+            *) echo "Unknown package in tag $tag"; exit 1 ;;
+          esac
+          actual=$(node -p "require('./$dir/package.json').version")
+          if [ "$actual" != "$version" ]; then
+            echo "Tag version $version does not match $dir/package.json version $actual"; exit 1
+          fi
+          if [ "$name" = hosannaith-mcp ]; then
+            node -e '
+              const s = require("./mcp/server.json"), v = process.argv[1];
+              const bad = [s.version, ...s.packages.map((p) => p.version)].filter((x) => x !== v);
+              if (bad.length) { console.error("mcp/server.json versions must all be " + v); process.exit(1); }
+            ' "$version"
+          fi
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "Publishing $name@$version from $dir"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Staged publishing needs npm 11.15.0 or newer (trusted publishing alone: 11.5.1) and
+      # Node 22.14.0 or newer. Node 22 ships with npm 10, so upgrade and check both.
+      - name: Upgrade npm
+        run: |
+          npm install -g npm@11
+          node -e '
+            const [a, b] = [process.versions.node, process.argv[1]].map((v) => v.split(".").map(Number));
+            const atLeast = (v, w) => v[0] !== w[0] ? v[0] > w[0] : v[1] !== w[1] ? v[1] > w[1] : v[2] >= w[2];
+            if (!atLeast(a, [22, 14, 0]) || !atLeast(b, [11, 15, 0])) { console.error("need node >= 22.14.0 and npm >= 11.15.0"); process.exit(1); }
+            console.log("node", process.versions.node, "npm", process.argv[1]);
+          ' "$(npm --version)"
+
+      # Same install, checks and license gate as CI, per package.
+      - name: Check hosannaith-client
+        if: steps.pkg.outputs.name == 'hosannaith-client'
+        working-directory: sdk/typescript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm run --if-present test
+          pnpm licenses list --prod --json | node ../../scripts/check-licenses.mjs
+      - name: Check hosannaith-mcp
+        if: steps.pkg.outputs.name == 'hosannaith-mcp'
+        working-directory: mcp
+        run: |
+          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm run build
+          pnpm licenses list --prod --json --ignore-workspace | node ../scripts/check-licenses.mjs
+
+      - name: SBOM (CycloneDX)
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: |
+          npx --yes @cyclonedx/cdxgen@11 -t js --required-only -o "$RUNNER_TEMP/sbom.cdx.json" .
+          node -e 'const s = require(process.argv[1]); console.log("SBOM components:", (s.components || []).length)' "$RUNNER_TEMP/sbom.cdx.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.ref_name }}
+          path: ${{ runner.temp }}/sbom.cdx.json
+
+      - name: Contents
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm pack --dry-run
+
+      - name: Stage for approval (trusted publishing)
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: npm stage publish

@@ -29,6 +29,28 @@ const latencyMs = (description: string) => ({
   description,
 });
 
+// Attestation members (docs/attestation.md). Present only when the server signs results.
+const attestationProperties = {
+  spec_version: {
+    type: 'string',
+    pattern: '^\\d+\\.\\d+\\.\\d+$',
+    description: 'Version of the signed attestation format (semver). Present on signed results.',
+  },
+  generated_at: { ...timestampUtc, description: 'When the result was signed. Present on signed results.' },
+  signature: {
+    type: 'object',
+    description:
+      'ES256 signature over the RFC 8785 canonical JSON of this object without its own `signature`. ' +
+      'Public keys: /.well-known/hosannaith-keys.json. Present on signed results.',
+    required: ['alg', 'kid', 'sig'],
+    properties: {
+      alg: { const: 'ES256' },
+      kid: { type: 'string', description: 'RFC 7638 thumbprint of the signing key.' },
+      sig: { type: 'string', pattern: '^[A-Za-z0-9_-]{86}$', description: 'Raw 64-byte r||s, base64url, no padding.' },
+    },
+  },
+} as const;
+
 export const reliabilityDetailSchema = {
   type: 'object',
   description:
@@ -90,6 +112,7 @@ const checkResultBody = {
     },
     detail: reliabilityDetailSchema,
     observedAt: { ...timestampUtc, description: 'When this result was computed.' },
+    ...attestationProperties,
   },
 } as const;
 
@@ -114,6 +137,7 @@ export const batchResultSchema = {
     requested: { type: 'integer', minimum: 0, description: 'Targets sent by the caller.' },
     capped: { type: 'boolean', description: 'True when more targets were sent than the cap allows.' },
     observedAt: timestampUtc,
+    ...attestationProperties,
   },
 } as const;
 

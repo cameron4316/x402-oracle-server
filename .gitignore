@@ -7,3 +7,6 @@ data/*.jsonl
 data/targets.json
 reports/
 *.bak*
+# attestation signing keys never belong in the repo (public keys live in attest/jwks-history.json)
+*.pem
+keys/

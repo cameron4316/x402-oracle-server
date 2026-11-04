@@ -44,6 +44,25 @@ jobs:
           pnpm start > "$RUNNER_TEMP/server.log" 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:4021/health > /dev/null && break; sleep 1; done
           node scripts/smoke-free-routes.mjs http://localhost:4021 || { echo '--- server log ---'; cat "$RUNNER_TEMP/server.log"; exit 1; }
+      # With a signing key that is NOT published in attest/jwks-history.json, the API must refuse to
+      # start rather than issue signatures nobody can verify.
+      - name: Refuses to start with an unpublished signing key
+        env:
+          NETWORK: testnet
+          AVM_ADDRESS: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
+          PORT: '4031'
+          MONITOR_TARGETS: ''
+          OBSERVATION_LOG: ${{ runner.temp }}/smoke2/observations.jsonl
+        run: |
+          node_modules/.bin/tsx scripts/attest-keygen.ts "$RUNNER_TEMP/unpublished/signing.pem" > /dev/null
+          set +e
+          SIGNING_KEY_PATH="$RUNNER_TEMP/unpublished/signing.pem" timeout 60 pnpm start > "$RUNNER_TEMP/refuse.log" 2>&1
+          code=$?
+          set -e
+          cat "$RUNNER_TEMP/refuse.log"
+          test "$code" -ne 0 && test "$code" -ne 124 || { echo "expected a startup failure, got exit $code"; exit 1; }
+          grep -q 'not published as "active"' "$RUNNER_TEMP/refuse.log"
+          ! grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/refuse.log"
 
   sdk:
     name: hosannaith-client (typecheck, licenses)

@@ -11,6 +11,12 @@ import { declareDiscoveryExtension } from '@x402-avm/extensions';
 import { CONFIG } from './config.js';
 import { reliabilityCheck } from './checks/reliability/index.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
+import { loadSigner } from './attest/keyset.js';
+import { attest, attestBatch } from './attest/sign.js';
+
+// Same signing key and rules as the HTTP API (docs/attestation.md).
+const signer = loadSigner();
+console.log(signer ? `[attest] signing results with key ${signer.kid}` : '[attest] SIGNING_KEY_PATH not set: results are unsigned');
 
 // Remote, x402-gated MCP server (Streamable HTTP) — runs as its own process (hosannaith-mcp.service
 // on :4022, nginx /mcp) so a crash or spike here never touches the live reliability API on :4021.
@@ -164,6 +170,8 @@ const INFO_TEXT = [
   '      score_normalized = score / 100)',
   '  }',
   'JSON Schema: https://api.hosannaith.com/schema/check-result.json',
+  'When signing is enabled, results also carry spec_version, generated_at and an ES256 signature',
+  'verifiable against https://api.hosannaith.com/.well-known/hosannaith-keys.json.',
   '',
   'Decision rule for an agent: pay/route to endpoints that are "pass"; treat "degraded" as risky;',
   'avoid "fail"; for "unknown" or "one-shot", gather more signal or proceed with low stakes.',
@@ -187,12 +195,15 @@ async function buildPaidTools() {
   return {
     singleCfg,
     batchCfg,
-    single: createPaymentWrapper(resourceServer, singleCfg)<{ target: string }>(async ({ target }) =>
-      json(await reliabilityCheck.run(target)),
-    ),
-    batch: createPaymentWrapper(resourceServer, batchCfg)<{ targets: string[] }>(async ({ targets }) =>
-      json(await reliabilityBatch(targets)),
-    ),
+    // Results are signed inside the paid handler, after payment; the payment wrapper is unchanged.
+    single: createPaymentWrapper(resourceServer, singleCfg)<{ target: string }>(async ({ target }) => {
+      const result = await reliabilityCheck.run(target);
+      return json(signer ? attest(signer, result) : result);
+    }),
+    batch: createPaymentWrapper(resourceServer, batchCfg)<{ targets: string[] }>(async ({ targets }) => {
+      const result = await reliabilityBatch(targets);
+      return json(signer ? attestBatch(signer, result) : result);
+    }),
   };
 }
 

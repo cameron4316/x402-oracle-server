@@ -85,6 +85,17 @@ for (const name of ['check-result', 'batch-result', 'problem']) {
   });
 }
 
+await check('GET /.well-known/hosannaith-keys.json -> public key set, no private material', async () => {
+  const res = await get('/.well-known/hosannaith-keys.json');
+  expect(res.status === 200, `status ${res.status}`);
+  const ks = await res.json();
+  expect(Array.isArray(ks.keys) && Array.isArray(ks.revoked_keys), 'keys[] and revoked_keys[] expected');
+  for (const k of ks.keys) {
+    expect(typeof k.kid === 'string' && k.alg === 'ES256' && k.use === 'sig', `bad key entry ${JSON.stringify(k)}`);
+    expect(!('d' in k), `key ${k.kid} exposes private material`);
+  }
+});
+
 async function expectProblem(res, status) {
   expect(res.status === status, `status ${res.status}`);
   expect(ctype(res) === 'application/problem+json', `content-type ${ctype(res)}`);

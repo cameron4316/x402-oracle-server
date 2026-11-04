@@ -14,12 +14,20 @@ import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.
 import { PUBLISHED_SCHEMAS } from './contract/schema.js';
 import { buildOpenApi, type PaidRouteLike } from './contract/openapi.js';
 import { PROBLEM_CONTENT_TYPE, problem } from './contract/problem.js';
+import { loadKeyHistory, loadSigner, publishedKeySet } from './attest/keyset.js';
+import { attest, attestBatch } from './attest/sign.js';
 
 // --- x402 resource server wiring (mirrors the official Algorand tutorial) ---
 const facilitatorClient = new HTTPFacilitatorClient({ url: CONFIG.facilitatorUrl });
 const server = new x402ResourceServer(facilitatorClient);
 server.register(CONFIG.caip2, new ExactAvmScheme());
 server.registerExtension(bazaarResourceServerExtension as unknown as ResourceServerExtension);
+
+// Signed attestations (docs/attestation.md). Unsigned until SIGNING_KEY_PATH is set; refuses to
+// start if it is set but the key is not published as active in attest/jwks-history.json.
+const keyHistory = loadKeyHistory();
+const signer = loadSigner(process.env.SIGNING_KEY_PATH, keyHistory);
+console.log(signer ? `[attest] signing results with key ${signer.kid}` : '[attest] SIGNING_KEY_PATH not set: results are unsigned');
 
 const app = new Hono();
 
@@ -53,7 +61,8 @@ app.get('/reliability', async (c) => {
   const check = getCheck('reliability');
   if (!check) return problemResponse(c, 500, 'reliability check not registered');
   const result = await check.run(target);
-  return c.json(result);
+  // Signed after payment and after the check: the payment middleware is not involved.
+  return c.json(signer ? attest(signer, result) : result);
 });
 
 // --- Paid handler: batch reliability — score up to 50 endpoints in one call ---
@@ -71,7 +80,7 @@ app.post('/reliability/batch', async (c) => {
     return problemResponse(c, 400, 'Body must be { "targets": ["<endpoint-url>", ...] }');
   }
   const result = await reliabilityBatch(targets);
-  return c.json(result);
+  return c.json(signer ? attestBatch(signer, result) : result);
 });
 
 // Free, unpaid health check for your OWN uptime monitoring (not payment-gated).
@@ -110,6 +119,10 @@ function wellKnownX402() {
   };
 }
 app.get('/.well-known/x402', (c) => c.json(wellKnownX402()));
+
+// Public keys for verifying signed results: a JWKS (keys[]) plus revoked_keys[]. Free.
+const publishedKeys = publishedKeySet(keyHistory);
+app.get('/.well-known/hosannaith-keys.json', (c) => c.json(publishedKeys));
 
 // --- Machine-readable contract (free, unpaid): OpenAPI 3.1 + JSON Schemas of every response shape ---
 const openApiDoc = buildOpenApi(routes as unknown as Record<string, PaidRouteLike>, { maxBatchTargets: MAX_BATCH_TARGETS });
@@ -221,11 +234,21 @@ enrolled for ongoing monitoring.
 GET /health                     - liveness check: {"ok":true,...}
 GET /                           - service info (send Accept: application/json for JSON)
 GET /.well-known/x402           - machine-readable discovery document
+GET /.well-known/hosannaith-keys.json - public keys for verifying signed results
 GET /openapi.json               - OpenAPI 3.1 description (paid terms in each operation's x-x402)
 GET /schema/check-result.json   - JSON Schema of a reliability result
 GET /schema/batch-result.json   - JSON Schema of a batch result
 GET /schema/problem.json        - JSON Schema of an error body
 GET /llms.txt                   - this file
+
+## Signed results
+When signing is enabled, every result (and every batch, as a whole) also carries:
+  "spec_version": "1.0.0", "generated_at": "<RFC 3339 UTC>",
+  "signature": { "alg": "ES256", "kid": "<RFC 7638 thumbprint>", "sig": "<base64url r||s>" }
+The signature covers the RFC 8785 canonical JSON of the object without its own "signature".
+In a batch, each result is signed on its own (so it can be forwarded and still verify) and the
+batch signature also covers every per-result signature. Verify against the key with that kid in
+/.well-known/hosannaith-keys.json; reject keys listed in revoked_keys.
 
 ## Errors
 Errors from this server are RFC 9457 Problem Details (application/problem+json):

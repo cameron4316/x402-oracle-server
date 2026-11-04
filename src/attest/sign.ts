@@ -17,15 +17,9 @@
 import { sign as cryptoSign, type KeyObject } from 'node:crypto';
 import { canonicalize } from './jcs.js';
 import { publicJwk, thumbprint } from './keys.js';
+import { SIGNATURE_ALG, SPEC_VERSION, type SignatureBlock } from './format.js';
 
-export const SPEC_VERSION = '1.0.0';
-export const SIGNATURE_ALG = 'ES256';
-
-export interface SignatureBlock {
-  alg: typeof SIGNATURE_ALG;
-  kid: string;
-  sig: string;
-}
+export { SIGNATURE_ALG, SPEC_VERSION, type SignatureBlock };
 
 export interface Attestation {
   spec_version: string;

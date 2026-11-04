@@ -80,6 +80,7 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      - run: pnpm test
       - name: Dependency licenses (production)
         run: pnpm licenses list --prod --json | node ../../scripts/check-licenses.mjs
 

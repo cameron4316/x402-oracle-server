@@ -121,6 +121,35 @@ same measurements in OpenEAGO SLO terms; see the
 `confidence` is `"history"` when the score is backed by accumulated monitoring, or `"one-shot"`
 for a target queried for the first time (a single live probe, `score: null`).
 
+## Signed results are verified for you
+
+Every Hosannaith result is signed with the oracle's published key. The client checks that
+signature before it returns anything, so an altered or forged score never reaches your code.
+
+```ts
+import { getReliability, getVerification, HosannaithVerificationError } from 'hosannaith-client';
+
+try {
+  const r = await getReliability(url, { mnemonic });
+  getVerification(r); // 'verified' (or 'jwks_unavailable' if the key list couldn't be fetched)
+} catch (err) {
+  if (err instanceof HosannaithVerificationError) {
+    // err.reason: 'signature_invalid' | 'signature_missing' | 'unknown_kid' | 'revoked_kid' | ...
+  }
+}
+```
+
+| `verify` | Bad, missing or revoked signature | Key list unreachable |
+|---|---|---|
+| `'auto'` (default) | throws `HosannaithVerificationError` | result returned, marked `jwks_unavailable` |
+| `'strict'` | throws | throws |
+| `'off'` | not checked | not checked |
+
+The result object is never modified, so you can store or forward it and anyone can verify it
+again later. In the **guard**, a score whose signature fails is always refused, whatever
+`onError` says: a forged "pass" is exactly the attack signing exists to stop. Each
+`GuardDecision` records how its score was verified in `decision.verification`.
+
 ## Requirements
 
 - An Algorand **MainNet** account funded with USDC (each check is $1.00, or $7.00 for a batch of up to 50) and ALGO for fees.

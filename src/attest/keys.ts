@@ -1,4 +1,5 @@
 // P-256 key handling for ES256 attestations: public JWK export and the RFC 7638 key id.
+// Dependency-free: this file is copied verbatim into the client SDK (sdk/typescript/attest/).
 import { createHash, createPublicKey, type KeyObject } from 'node:crypto';
 
 export interface PublicJwk {

@@ -142,7 +142,10 @@ app.get('/reports/:file{[a-z0-9-]+\\.json}', async (c) => {
 });
 
 // --- Machine-readable contract (free, unpaid): OpenAPI 3.1 + JSON Schemas of every response shape ---
-const openApiDoc = buildOpenApi(routes as unknown as Record<string, PaidRouteLike>, { maxBatchTargets: MAX_BATCH_TARGETS });
+const openApiDoc = buildOpenApi(routes as unknown as Record<string, PaidRouteLike>, {
+  maxBatchTargets: MAX_BATCH_TARGETS,
+  signed: signer !== null,
+});
 app.get('/openapi.json', (c) => c.json(openApiDoc));
 app.get('/schema/:name{[a-z-]+\\.json}', (c) => {
   const name = c.req.param('name').replace(/\.json$/, '');
@@ -153,6 +156,21 @@ app.get('/schema/:name{[a-z-]+\\.json}', (c) => {
 });
 
 // Agent-facing guide (served as text/plain): what this is, how to pay it, how to read the result.
+// Described only when this server actually signs, so the guide never promises what it doesn't do.
+const signedSection = signer
+  ? `## Signed results
+Every result is signed (and every batch, as a whole). Each carries:
+  "spec_version": "1.0.0", "generated_at": "<RFC 3339 UTC>",
+  "signature": { "alg": "ES256", "kid": "<RFC 7638 thumbprint>", "sig": "<base64url r||s>" }
+Current signing key: ${signer.kid}
+The signature covers the RFC 8785 canonical JSON of the object without its own "signature".
+In a batch, each result is signed on its own (so it can be forwarded and still verify) and the
+batch signature also covers every per-result signature. Verify against the key with that kid in
+/.well-known/hosannaith-keys.json; reject keys listed in revoked_keys.
+
+`
+  : '';
+
 app.get('/llms.txt', (c) =>
   c.text(`# Hosannaith — x402 reliability oracle
 
@@ -259,16 +277,7 @@ GET /schema/batch-result.json   - JSON Schema of a batch result
 GET /schema/problem.json        - JSON Schema of an error body
 GET /llms.txt                   - this file
 
-## Signed results
-When signing is enabled, every result (and every batch, as a whole) also carries:
-  "spec_version": "1.0.0", "generated_at": "<RFC 3339 UTC>",
-  "signature": { "alg": "ES256", "kid": "<RFC 7638 thumbprint>", "sig": "<base64url r||s>" }
-The signature covers the RFC 8785 canonical JSON of the object without its own "signature".
-In a batch, each result is signed on its own (so it can be forwarded and still verify) and the
-batch signature also covers every per-result signature. Verify against the key with that kid in
-/.well-known/hosannaith-keys.json; reject keys listed in revoked_keys.
-
-## Errors
+${signedSection}## Errors
 Errors from this server are RFC 9457 Problem Details (application/problem+json):
 { "type": "about:blank", "title": "Bad Request", "status": 400, "detail": "...", "error": "..." }
 The 402 Payment Required response is the x402 protocol's own (see "How to pay").

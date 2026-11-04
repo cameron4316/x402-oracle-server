@@ -120,6 +120,11 @@ const ROUTES: Record<string, PaidRouteLike> = {
   },
 };
 
+test('OpenAPI describes results as signed only when the server signs', () => {
+  assert.match(buildOpenApi(ROUTES, { maxBatchTargets: 50, signed: true }).info.description, /Every result is signed/);
+  assert.doesNotMatch(buildOpenApi(ROUTES, { maxBatchTargets: 50 }).info.description, /signed/);
+});
+
 test('OpenAPI: payment terms come from the route config; every $ref resolves', () => {
   const doc = buildOpenApi(ROUTES, { maxBatchTargets: 50 });
   assert.equal(doc.openapi, '3.1.0');

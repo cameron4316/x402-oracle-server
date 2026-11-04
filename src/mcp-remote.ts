@@ -170,8 +170,12 @@ const INFO_TEXT = [
   '      score_normalized = score / 100)',
   '  }',
   'JSON Schema: https://api.hosannaith.com/schema/check-result.json',
-  'When signing is enabled, results also carry spec_version, generated_at and an ES256 signature',
-  'verifiable against https://api.hosannaith.com/.well-known/hosannaith-keys.json.',
+  ...(signer
+    ? [
+        'Every result is signed: it carries spec_version, generated_at and an ES256 signature',
+        `(key ${signer.kid}) verifiable against https://api.hosannaith.com/.well-known/hosannaith-keys.json.`,
+      ]
+    : []),
   '',
   'Decision rule for an agent: pay/route to endpoints that are "pass"; treat "degraded" as risky;',
   'avoid "fail"; for "unknown" or "one-shot", gather more signal or proceed with low stakes.',

@@ -1,5 +1,17 @@
 {
   "description": "Every Hosannaith attestation signing key, PUBLIC halves only. Served as /.well-known/hosannaith-keys.json. Retired keys stay forever so old attestations remain verifiable; revoked keys are removed from keys and listed in revoked_keys. See docs/attestation.md.",
-  "keys": [],
+  "keys": [
+    {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "1Cf6GA2RS3w9uEigx6ccV-OlPCcNqtA_X9OGMIlwpag",
+      "y": "GkQocuN8drnE3alZns09fX47jOrHl0B1xh0n2OjGELI",
+      "kid": "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k",
+      "alg": "ES256",
+      "use": "sig",
+      "status": "active",
+      "activated_at": "2026-11-04T03:30:00Z"
+    }
+  ],
   "revoked_keys": []
 }

@@ -103,16 +103,22 @@ jobs:
       - name: Dependency licenses (production)
         run: pnpm licenses list --prod --json --ignore-workspace | node ../scripts/check-licenses.mjs
 
+  # Rehearses the release workflow's build job for both packages: license and dependency data,
+  # SBOM, and the exact tarball, which must carry the license files and no tests, and must repack
+  # to the same file list once extracted (the release stages the extracted tarball).
   packages:
     name: npm packages (dry run, SBOM)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        dir: [sdk/typescript, mcp]
-    defaults:
-      run:
-        working-directory: ${{ matrix.dir }}
+        include:
+          - dir: sdk/typescript
+            install: pnpm install --frozen-lockfile
+            pnpmflags: ''
+          - dir: mcp
+            install: pnpm install --ignore-workspace --no-frozen-lockfile
+            pnpmflags: --ignore-workspace
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -121,20 +127,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install --ignore-workspace --no-frozen-lockfile; fi
-      - run: pnpm run --if-present build
-      # The tarball must carry the license files and must not carry tests.
-      - name: What npm would publish
+      - name: Install and build
+        working-directory: ${{ matrix.dir }}
         run: |
-          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          ${{ matrix.install }}
+          pnpm run --if-present build
+          pnpm licenses list --prod --json ${{ matrix.pnpmflags }} > "$RUNNER_TEMP/licenses.json"
+          pnpm list --prod --depth Infinity --json ${{ matrix.pnpmflags }} > "$RUNNER_TEMP/list.json"
+      - name: SBOM (CycloneDX)
+        run: |
+          node scripts/sbom.mjs --package "${{ matrix.dir }}/package.json" \
+            --list "$RUNNER_TEMP/list.json" --licenses "$RUNNER_TEMP/licenses.json" > "$RUNNER_TEMP/sbom.cdx.json"
+      - name: Tarball contents
+        working-directory: ${{ matrix.dir }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out" "$RUNNER_TEMP/pkg"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/out" --json > "$RUNNER_TEMP/pack.json"
+          tarball=$(node -p 'require(process.argv[1])[0].filename' "$RUNNER_TEMP/pack.json")
+          tar -xzf "$RUNNER_TEMP/out/$tarball" -C "$RUNNER_TEMP/pkg" --strip-components=1
+          (cd "$RUNNER_TEMP/pkg" && npm pack --dry-run --ignore-scripts --json > "$RUNNER_TEMP/repack.json")
           node -e '
-            const files = require(process.argv[1])[0].files.map((f) => f.path);
+            const list = (f) => require(f)[0].files.map((x) => x.path).sort();
+            const files = list(process.argv[1]), again = list(process.argv[2]);
             console.log(files.join("\n"));
             for (const f of ["LICENSE", "NOTICE", "package.json", "README.md"]) if (!files.includes(f)) throw new Error("missing " + f);
             if (files.some((f) => f.startsWith("test/") || f.endsWith(".test.ts"))) throw new Error("tests would be published");
-          ' "$RUNNER_TEMP/pack.json"
-      - name: SBOM (CycloneDX)
-        run: |
-          npx --yes @cyclonedx/cdxgen@11 -t js --required-only -o "$RUNNER_TEMP/sbom.cdx.json" .
-          node -e 'const s = require(process.argv[1]); console.log("SBOM components:", (s.components || []).length)' "$RUNNER_TEMP/sbom.cdx.json"
-
+            if (JSON.stringify(files) !== JSON.stringify(again)) throw new Error("the extracted tarball repacks differently");
+          ' "$RUNNER_TEMP/pack.json" "$RUNNER_TEMP/repack.json"

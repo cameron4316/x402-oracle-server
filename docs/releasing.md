@@ -9,11 +9,17 @@ Actions by [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) u
   token, and only this repository's `publish.yml` running in the `npm` environment is trusted.
 - A release is **staged**, not live. A maintainer reviews it and approves it with 2FA before anyone
   can install it, so a compromised workflow alone cannot ship a package.
-- Before staging, the workflow runs the same checks and dependency license gate as CI, checks that
-  the tag matches the package version, and produces a CycloneDX SBOM (kept as a workflow artifact).
+- No dependency code runs with publishing rights. A `build` job without credentials checks the tag
+  against the package version (and that it points at `main`), runs the same checks and dependency
+  license gate as CI, writes a CycloneDX SBOM with `scripts/sbom.mjs` from pnpm's own resolution,
+  and packs the tarball. A separate `stage` job, the only one given an OIDC token, installs nothing but npm itself,
+  checks the tarball's SHA-256 and stages exactly that tarball with lifecycle scripts disabled.
+- Third-party actions in the release workflow are pinned to commit SHAs.
+- The tarball and SBOM are kept as the `release` artifact of the workflow run.
 
-Every pull request also runs `npm pack --dry-run` and the SBOM for both packages (CI job
-"npm packages (dry run, SBOM)"), so packaging problems show up before a release.
+Every pull request rehearses the build job for both packages (CI job "npm packages (dry run,
+SBOM)"): the SBOM must build, and the tarball must carry LICENSE, NOTICE and README, carry no tests,
+and repack to the same file list once extracted.
 
 ## One-time setup on npmjs.com (per package)
 
@@ -42,8 +48,12 @@ repository, which trusted publishing requires.
    git tag hosannaith-client@0.4.0 && git push origin hosannaith-client@0.4.0
    git tag hosannaith-mcp@0.3.0 && git push origin hosannaith-mcp@0.3.0
    ```
-3. Watch the "Publish to npm" run. It stops before staging if any check fails.
+3. Watch the "Publish to npm" run. It stops before staging if any check fails. Nothing is public
+   until step 4.
 4. Review the staged release on npmjs.com (**Staged Packages** tab) or with
-   `npm stage list hosannaith-client`, then approve it with 2FA (button, or
-   `npm stage approve <stage-id>`).
-5. For the MCP server, update the MCP Registry listing afterwards with `mcp-publisher publish`.
+   `npm stage list hosannaith-client`. The SHA-256 printed by the run's Pack step identifies the
+   tarball. Approve it with 2FA (button, or `npm stage approve <stage-id>`), or leave it unapproved
+   to abandon the release.
+5. Check the new version page on npmjs.com shows its provenance (built by this repository's
+   `publish.yml`).
+6. For the MCP server, update the MCP Registry listing afterwards with `mcp-publisher publish`.

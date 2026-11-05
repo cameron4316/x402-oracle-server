@@ -1,6 +1,6 @@
 {
   "name": "hosannaith-mcp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "mcpName": "io.github.cameron4316/hosannaith-mcp",
   "type": "module",
   "description": "MCP server for the Hosannaith x402 reliability oracle on Algorand — gives any MCP agent a check_x402_reliability tool to vet an endpoint before paying it.",
@@ -17,7 +17,7 @@
   "bin": {
     "hosannaith-mcp": "dist/index.js"
   },
-  "files": ["dist", "README.md", "LICENSE", "NOTICE"],
+  "files": ["dist", "README.md", "CHANGELOG.md", "LICENSE", "NOTICE"],
   "engines": {
     "node": ">=18"
   },

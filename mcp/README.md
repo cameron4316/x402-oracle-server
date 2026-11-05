@@ -36,7 +36,10 @@ A score looks like:
     "protocol_conformance_pct": 100,
     "score_normalized": 0.958
   },
-  "observedAt": "2026-10-14T00:00:00.000Z"
+  "observedAt": "2026-10-14T00:00:00.000Z",
+  "spec_version": "1.0.0",
+  "generated_at": "2026-10-14T00:00:00.120Z",
+  "signature": { "alg": "ES256", "kid": "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k", "sig": "…" }
 }
 ```
 
@@ -44,6 +47,7 @@ A score looks like:
 - `score`: 0–100, or `null` when there isn't enough history to stand behind a number
 - `detail.confidence`: `history` (scored from accrued observations) · `one-shot` (only one live probe — treat cautiously)
 - `detail.availability_pct`, `error_rate_pct`, `protocol_conformance_pct`, `score_normalized`: the same measurements in OpenEAGO SLO terms ([field reference](https://github.com/cameron4316/x402-oracle-server#reading-the-result))
+- `signature`: every result is signed (ES256), so it can be forwarded and still checked against the [published keys](https://api.hosannaith.com/.well-known/hosannaith-keys.json). The [`hosannaith-client`](https://www.npmjs.com/package/hosannaith-client) package verifies automatically; the format is in [docs/attestation.md](https://github.com/cameron4316/x402-oracle-server/blob/main/docs/attestation.md).
 
 ## Install
 

@@ -10,6 +10,16 @@
 import algosdk from 'algosdk';
 import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
 import { ExactAvmScheme } from '@x402/avm';
+import {
+  HosannaithVerificationError,
+  KeySetCache,
+  getVerification,
+  verifyResult,
+  type VerificationStatus,
+  type VerifyMode,
+} from './verification.js';
+
+export { HosannaithVerificationError, getVerification, type VerificationStatus, type VerifyMode };
 
 // Facilitator-verified CAIP-2 for Algorand MainNet.
 // NOTE: @x402/avm ships the spec-correct *truncated* CAIP-2 form, but the live GoPlausible
@@ -73,10 +83,21 @@ export interface BatchReliabilityResult {
 }
 
 export interface HosannaithOptions {
-  /** 25-word Algorand (algo25) mnemonic of the account that pays. Keep it secret — never commit it. */
-  mnemonic: string;
+  /** 25-word Algorand (algo25) mnemonic of the account that pays. Keep it secret — never commit it.
+   *  Required unless you pass your own `payingFetch`. */
+  mnemonic?: string;
+  /** Advanced: your own x402 paying fetch (e.g. a different signer). Replaces `mnemonic`. */
+  payingFetch?: typeof fetch;
   /** Override the oracle base URL. Defaults to https://api.hosannaith.com */
   baseUrl?: string;
+  /**
+   * Check each result's signature against the oracle's published key set before returning it.
+   * 'auto' (default): a bad, missing or revoked signature throws HosannaithVerificationError; if the
+   * key set cannot be fetched the result is returned and marked 'jwks_unavailable'.
+   * 'strict': also throw when the key set cannot be fetched. 'off': do not verify.
+   * The result object is never modified; read the outcome with getVerification(result).
+   */
+  verify?: VerifyMode;
 }
 
 /**
@@ -84,13 +105,18 @@ export interface HosannaithOptions {
  */
 export class HosannaithClient {
   private readonly baseUrl: string;
-  private readonly mnemonic: string;
-  private payingFetch: typeof fetch | null = null;
+  private readonly mnemonic: string | undefined;
+  private payingFetch: typeof fetch | null;
+  private readonly verifyMode: VerifyMode;
+  private readonly keys: KeySetCache;
 
   constructor(opts: HosannaithOptions) {
-    if (!opts?.mnemonic) throw new Error('HosannaithClient: `mnemonic` is required.');
+    if (!opts?.mnemonic && !opts?.payingFetch) throw new Error('HosannaithClient: `mnemonic` is required.');
     this.mnemonic = opts.mnemonic;
+    this.payingFetch = opts.payingFetch ?? null;
     this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.verifyMode = opts.verify ?? 'auto';
+    this.keys = new KeySetCache(`${this.baseUrl}/.well-known/hosannaith-keys.json`);
   }
 
   // Build an x402 paying fetch from the mnemonic. We construct a ClientAvmSigner BY HAND
@@ -99,7 +125,7 @@ export class HosannaithClient {
   // stable contract. algosdk does the mnemonic->key derivation and the Ed25519 signing.
   private getPayingFetch(): typeof fetch {
     if (!this.payingFetch) {
-      const { addr, sk } = algosdk.mnemonicToSecretKey(this.mnemonic.trim());
+      const { addr, sk } = algosdk.mnemonicToSecretKey((this.mnemonic ?? '').trim());
       const signer: any = {
         address: String(addr),
         signTransactions: async (txns: Uint8Array[], indexesToSign?: number[]) =>
@@ -125,7 +151,9 @@ export class HosannaithClient {
       const body = await res.text().catch(() => '');
       throw new Error(`Hosannaith request failed (HTTP ${res.status}): ${body || '(no body)'}`);
     }
-    return (await res.json()) as ReliabilityResult;
+    const result = (await res.json()) as ReliabilityResult;
+    await verifyResult(result, 'single', this.verifyMode, this.keys);
+    return result;
   }
 
   /** Pay once and score up to 50 endpoints in a single batch call ($7 flat). Targets with no
@@ -144,7 +172,9 @@ export class HosannaithClient {
       const body = await res.text().catch(() => '');
       throw new Error(`Hosannaith batch request failed (HTTP ${res.status}): ${body || '(no body)'}`);
     }
-    return (await res.json()) as BatchReliabilityResult;
+    const batch = (await res.json()) as BatchReliabilityResult;
+    await verifyResult(batch, 'batch', this.verifyMode, this.keys);
+    return batch;
   }
 }
 
@@ -188,6 +218,10 @@ export interface GuardDecision {
   cached: boolean;
   /** Set when the reliability check itself failed (oracle down, payment error). */
   error?: string;
+  /** How the score's signature was checked: 'verified', a failure reason ('signature_invalid',
+   *  'signature_missing', 'unknown_kid', 'revoked_kid', 'malformed_signature', 'unsupported_alg'),
+   *  'jwks_unavailable' (key set unreachable) or 'verification_skipped' (verify: 'off'). */
+  verification?: VerificationStatus;
 }
 
 /** Thrown in `block` mode when an endpoint fails the reliability bar. Carries the full decision. */
@@ -217,6 +251,10 @@ export interface GuardOptions extends HosannaithOptions {
   /** Called with every decision — use for logging, metrics, or chaining another check (e.g. identity). */
   onDecision?: (decision: GuardDecision) => void;
 }
+// GuardOptions inherits `verify` from HosannaithOptions. A score whose signature fails is never
+// trusted: the request is refused (thrown in `block` mode) whatever `onError` says, because a
+// tampered score is the exact attack signing exists to stop. Only an unreachable key set follows
+// the fail-open default, and `verify: 'strict'` refuses that too.
 
 /**
  * Wrap a fetch so every request to a payable endpoint is vetted by Hosannaith first.
@@ -235,14 +273,14 @@ export function wrapFetchWithReliabilityGuard(
   innerFetch: typeof fetch,
   opts: GuardOptions,
 ): typeof fetch {
-  if (!opts?.mnemonic) throw new Error('wrapFetchWithReliabilityGuard: `mnemonic` is required.');
+  if (!opts?.mnemonic && !opts?.payingFetch) throw new Error('wrapFetchWithReliabilityGuard: `mnemonic` is required.');
   const minScore = opts.minScore ?? 90;
   const mode = opts.mode ?? 'block';
   const cacheTtlMs = opts.cacheTtlMs ?? 15 * 60 * 1000;
   const onUnknown = opts.onUnknown ?? 'allow';
   const onError = opts.onError ?? 'allow';
   const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
-  const client = new HosannaithClient({ mnemonic: opts.mnemonic, baseUrl });
+  const client = new HosannaithClient({ mnemonic: opts.mnemonic, payingFetch: opts.payingFetch, baseUrl, verify: opts.verify });
   const cache = new Map<string, { result: ReliabilityResult; expires: number }>();
 
   const urlOf = (input: RequestInfo | URL): string =>
@@ -270,6 +308,7 @@ export function wrapFetchWithReliabilityGuard(
         cache.set(url, { result, expires: now + cacheTtlMs });
       }
       const confidence = result.detail?.confidence ?? null;
+      const verification = getVerification(result);
       let allow: boolean;
       let reason: string;
       if (result.status === 'unknown') {
@@ -282,8 +321,26 @@ export function wrapFetchWithReliabilityGuard(
         allow = false;
         reason = `score ${result.score ?? 'n/a'} < minScore ${minScore} (${result.status})`;
       }
-      decision = { url, allow, status: result.status, score: result.score, confidence, reason, cached };
+      decision = { url, allow, status: result.status, score: result.score, confidence, reason, cached, verification };
     } catch (err) {
+      if (err instanceof HosannaithVerificationError) {
+        // Signature failures are never allowed through (see GuardOptions).
+        decision = {
+          url,
+          allow: false,
+          status: 'unknown',
+          score: null,
+          confidence: null,
+          reason: `score signature could not be verified (${err.reason}): blocked`,
+          cached: false,
+          error: err.message,
+          verification: err.reason,
+        };
+        opts.onDecision?.(decision);
+        if (mode === 'block') throw new ReliabilityGuardError(decision);
+        console.warn(`[hosannaith guard] ${decision.reason}, proceeding (warn mode): ${url}`);
+        return innerFetch(input as RequestInfo, init);
+      }
       const allow = onError === 'allow';
       decision = {
         url,

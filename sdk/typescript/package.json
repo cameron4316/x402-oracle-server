@@ -17,6 +17,7 @@
   "exports": { ".": "./index.ts" },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"test/**/*.test.ts\"",
     "example": "tsx example.ts"
   },
   "dependencies": {

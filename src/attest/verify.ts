@@ -1,12 +1,13 @@
 // Verifies attestations produced by sign.ts against a published key set (JWKS).
-// Dependency-free (node:crypto only) so the same code can ship in the client SDK.
+// Dependency-free (node:crypto only): this file is copied verbatim into the client SDK
+// (sdk/typescript/attest/), and a test keeps the copies identical.
 //
 // Every failure has its own reason, so a caller can tell tampering (signature_invalid,
 // unknown_kid, revoked_kid, signature_missing) from things that are not about this object.
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { canonicalize } from './jcs.js';
 import { thumbprint, type PublicJwk } from './keys.js';
-import { SIGNATURE_ALG, type SignatureBlock } from './sign.js';
+import { SIGNATURE_ALG, type SignatureBlock } from './format.js';
 
 export interface PublishedKey extends PublicJwk {
   kid: string;

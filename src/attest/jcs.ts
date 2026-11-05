@@ -1,4 +1,5 @@
 // RFC 8785 JSON Canonicalization Scheme (JCS): the exact bytes that get signed.
+// Dependency-free: this file is copied verbatim into the client SDK (sdk/typescript/attest/).
 //
 // For the JSON data model (null, booleans, finite numbers, strings, arrays, plain objects), JCS is:
 //   - strings and numbers serialized exactly as ECMAScript's JSON.stringify does (RFC 8785 §3.2.2),

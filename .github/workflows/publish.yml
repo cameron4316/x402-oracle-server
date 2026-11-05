@@ -1,0 +1,160 @@
+name: Publish to npm
+
+# Stages one package per release tag on npm, using trusted publishing (GitHub OIDC): no npm token is
+# stored anywhere. The release is STAGED, not live: a maintainer reviews it and approves it with 2FA
+# on npmjs.com (or `npm stage approve <id>`) before anyone can install it.
+#
+#   tag hosannaith-client@<version>  releases sdk/typescript
+#   tag hosannaith-mcp@<version>     releases mcp
+#
+# Two jobs, so that no dependency code ever runs with publishing rights:
+#   build  no credentials. Checks the tag against the package version, runs the same checks and
+#          license gate as CI, writes the SBOM, packs the tarball.
+#   stage  the only job allowed an OIDC token. Installs only npm itself; checks the tarball hash and
+#          stages exactly what `build` packed.
+# Actions are pinned to commit SHAs. See docs/releasing.md.
+on:
+  push:
+    tags:
+      - 'hosannaith-client@*'
+      - 'hosannaith-mcp@*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    outputs:
+      tarball: ${{ steps.pack.outputs.tarball }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Resolve the package from the tag
+        id: pkg
+        run: |
+          tag="$GITHUB_REF_NAME"
+          name="${tag%@*}"
+          version="${tag##*@}"
+          case "$name" in
+            hosannaith-client) dir=sdk/typescript ;;
+            hosannaith-mcp) dir=mcp ;;
+            *) echo "Unknown package in tag $tag"; exit 1 ;;
+          esac
+          actual=$(node -p "require('./$dir/package.json').version")
+          if [ "$actual" != "$version" ]; then
+            echo "Tag version $version does not match $dir/package.json version $actual"; exit 1
+          fi
+          if [ "$name" = hosannaith-mcp ]; then
+            node -e '
+              const s = require("./mcp/server.json"), v = process.argv[1];
+              const bad = [s.version, ...s.packages.map((p) => p.version)].filter((x) => x !== v);
+              if (bad.length) { console.error("mcp/server.json versions must all be " + v); process.exit(1); }
+            ' "$version"
+          fi
+          git fetch --no-tags --depth=200 origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD || { echo "The tag must point at a commit on main"; exit 1; }
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "Releasing $name@$version from $dir"
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        with:
+          version: 10
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      # Same install, checks and license gate as CI, per package.
+      - name: Check hosannaith-client
+        if: steps.pkg.outputs.name == 'hosannaith-client'
+        working-directory: sdk/typescript
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm typecheck
+          pnpm run --if-present test
+          pnpm licenses list --prod --json > "$RUNNER_TEMP/licenses.json"
+          pnpm list --prod --depth Infinity --json > "$RUNNER_TEMP/list.json"
+      - name: Check hosannaith-mcp
+        if: steps.pkg.outputs.name == 'hosannaith-mcp'
+        working-directory: mcp
+        run: |
+          pnpm install --ignore-workspace --no-frozen-lockfile
+          pnpm run build
+          pnpm licenses list --prod --json --ignore-workspace > "$RUNNER_TEMP/licenses.json"
+          pnpm list --prod --depth Infinity --json --ignore-workspace > "$RUNNER_TEMP/list.json"
+      - name: Dependency licenses (production)
+        run: node scripts/check-licenses.mjs < "$RUNNER_TEMP/licenses.json"
+
+      - name: SBOM (CycloneDX)
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          node scripts/sbom.mjs --package "${{ steps.pkg.outputs.dir }}/package.json" \
+            --list "$RUNNER_TEMP/list.json" --licenses "$RUNNER_TEMP/licenses.json" \
+            > "$RUNNER_TEMP/out/sbom.cdx.json"
+
+      - name: Pack
+        id: pack
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: |
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/out" --json > "$RUNNER_TEMP/pack.json"
+          tarball=$(node -p 'require(process.argv[1])[0].filename' "$RUNNER_TEMP/pack.json")
+          tar -tzf "$RUNNER_TEMP/out/$tarball"
+          sha=$(sha256sum "$RUNNER_TEMP/out/$tarball" | cut -d' ' -f1)
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "$tarball sha256 $sha"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/out/
+          if-no-files-found: error
+
+  stage:
+    name: Stage ${{ github.ref_name }} for approval
+    needs: build
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      id-token: write # OIDC token for npm trusted publishing; nothing else
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Staged publishing needs npm 11.15.0 or newer and Node 22.14.0 or newer.
+      - name: Upgrade npm
+        run: |
+          npm install -g npm@11
+          node -e '
+            const [a, b] = [process.versions.node, process.argv[1]].map((v) => v.split(".").map(Number));
+            const atLeast = (v, w) => v[0] !== w[0] ? v[0] > w[0] : v[1] !== w[1] ? v[1] > w[1] : v[2] >= w[2];
+            if (!atLeast(a, [22, 14, 0]) || !atLeast(b, [11, 15, 0])) { console.error("need node >= 22.14.0 and npm >= 11.15.0"); process.exit(1); }
+            console.log("node", process.versions.node, "npm", process.argv[1]);
+          ' "$(npm --version)"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release
+          path: release
+
+      - name: Check the tarball is the one build packed
+        env:
+          TARBALL: ${{ needs.build.outputs.tarball }}
+          SHA256: ${{ needs.build.outputs.sha256 }}
+        run: |
+          echo "$SHA256  release/$TARBALL" | sha256sum -c -
+          mkdir pkg && tar -xzf "release/$TARBALL" -C pkg --strip-components=1
+
+      - name: Stage (trusted publishing)
+        working-directory: pkg
+        run: npm stage publish --ignore-scripts

@@ -49,7 +49,7 @@ function payingFetchFromMnemonic(mnemonic: string): typeof fetch {
   return wrapFetchWithPayment(fetch, client) as typeof fetch;
 }
 
-const server = new McpServer({ name: 'hosannaith', version: '0.1.0' });
+const server = new McpServer({ name: 'hosannaith', version: '0.3.0' });
 
 // --- Free tool: describe the oracle so an agent knows how to read a score ---
 server.registerTool(
@@ -83,6 +83,10 @@ server.registerTool(
           '      numbers in OpenEAGO SLO terms (error_rate_pct = % of probes that were 5xx or unreachable;',
           '      score_normalized = score / 100)',
           '  }',
+          '  spec_version, generated_at, signature: { alg: "ES256", kid, sig }: every result is signed by',
+          '    Hosannaith, so it can be forwarded and still checked. Verify against the published keys at',
+          '    https://api.hosannaith.com/.well-known/hosannaith-keys.json (the hosannaith-client npm',
+          '    package does this automatically).',
           'JSON Schema: https://api.hosannaith.com/schema/check-result.json',
           '',
           'Decision rule for an agent: pay/route to endpoints that are "pass"; treat "degraded" as risky;',

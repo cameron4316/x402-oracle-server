@@ -151,7 +151,7 @@ jobs:
             const list = (f) => require(f)[0].files.map((x) => x.path).sort();
             const files = list(process.argv[1]), again = list(process.argv[2]);
             console.log(files.join("\n"));
-            for (const f of ["LICENSE", "NOTICE", "package.json", "README.md"]) if (!files.includes(f)) throw new Error("missing " + f);
+            for (const f of ["LICENSE", "NOTICE", "package.json", "README.md", "CHANGELOG.md"]) if (!files.includes(f)) throw new Error("missing " + f);
             if (files.some((f) => f.startsWith("test/") || f.endsWith(".test.ts"))) throw new Error("tests would be published");
             if (JSON.stringify(files) !== JSON.stringify(again)) throw new Error("the extracted tarball repacks differently");
           ' "$RUNNER_TEMP/pack.json" "$RUNNER_TEMP/repack.json"

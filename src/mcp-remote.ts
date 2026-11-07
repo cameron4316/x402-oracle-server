@@ -19,7 +19,8 @@ import { reliabilityCheck } from './checks/reliability/index.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
 import { loadSigner } from './attest/keyset.js';
 import { attest, attestBatch } from './attest/sign.js';
-import { checkTarget, MAX_TARGET_LENGTH } from './checks/reliability/target-url.js';
+import { MAX_TARGET_LENGTH } from './checks/reliability/target-url.js';
+import { INFO_TOOL_ANNOTATIONS, PAID_TOOL_ANNOTATIONS, targetUrl } from './mcp-tools.js';
 import { AuditLog, PAYMENT_META_KEY, PAYMENT_RESPONSE_META_KEY, withAudit } from './mcp-audit.js';
 
 // Same signing key and rules as the HTTP API (docs/attestation.md).
@@ -214,33 +215,6 @@ const INFO_TEXT = [
 
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] });
 
-// A target the oracle will probe (src/checks/reliability/target-url.ts). The MCP SDK validates
-// arguments before calling the tool, so a refused target never reaches the payment wrapper: the
-// caller gets an error and pays nothing.
-const targetUrl = z
-  .string()
-  .max(MAX_TARGET_LENGTH)
-  .url()
-  .refine((t) => checkTarget(t).ok, {
-    message:
-      'Target not accepted: it must be a public http(s) URL (no credentials, internal host names, or ' +
-      'private, loopback, link-local or reserved addresses).',
-  });
-
-// Tool annotations (MCP spec). The paid tools only READ scores, but each call pays and may probe a
-// new target live, so they are not idempotent, and they reach out to third-party endpoints.
-const PAID_TOOL_ANNOTATIONS = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: true,
-} as const;
-const INFO_TOOL_ANNOTATIONS = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
 
 // Fetches the facilitator's /supported (feePayer etc.) and builds the wrappers once at startup.
 async function buildPaidTools() {

@@ -48,10 +48,10 @@ const facilitatorClient = new HTTPFacilitatorClient({ url: CONFIG.facilitatorUrl
 const resourceServer = new x402ResourceServer(
   facilitatorClient as unknown as ConstructorParameters<typeof x402ResourceServer>[0],
 );
-resourceServer.register(
-  CONFIG.caip2,
-  new ExactAvmScheme() as unknown as Parameters<typeof resourceServer.register>[1],
-);
+// Both Algorand network id forms are offered (spec form first); see the CAIP-2 note in config.ts.
+for (const network of CONFIG.caip2Offered) {
+  resourceServer.register(network, new ExactAvmScheme() as unknown as Parameters<typeof resourceServer.register>[1]);
+}
 
 type PaidTool = {
   name: string;
@@ -65,14 +65,21 @@ type PaidTool = {
 // Resolve a tool's payment requirements through the scheme (price -> atomic amount, feePayer from
 // the facilitator's /supported), exactly as the HTTP middleware does for `routes.config.ts`.
 async function paymentConfig(tool: PaidTool): Promise<PaymentWrapperConfig> {
-  const accepts = await resourceServer.buildPaymentRequirements({
-    scheme: 'exact',
-    network: CONFIG.caip2,
-    price: tool.price,
-    payTo: CONFIG.avmAddress,
-    // `tag` attributes the settlement to the Global x402 Challenge leaderboard.
-    extra: { asset: CONFIG.usdcAsaId, tag: CONFIG.competitionTag },
-  });
+  // One requirement per Algorand network id form, spec form first (CAIP-2 note in config.ts).
+  const accepts = (
+    await Promise.all(
+      CONFIG.caip2Offered.map((network) =>
+        resourceServer.buildPaymentRequirements({
+          scheme: 'exact',
+          network,
+          price: tool.price,
+          payTo: CONFIG.avmAddress,
+          // `tag` attributes the settlement to the Global x402 Challenge leaderboard.
+          extra: { asset: CONFIG.usdcAsaId, tag: CONFIG.competitionTag },
+        }),
+      ),
+    )
+  ).flat();
   return {
     accepts,
     resource: {

@@ -24,18 +24,17 @@ function paidRoute(opts: {
 }) {
   const output = { example: opts.exampleOutput };
   return {
-    accepts: [
-      {
-        scheme: 'exact' as const,
-        price: opts.price ?? '$1.00',
-        network: CONFIG.caip2,
-        payTo: CONFIG.avmAddress,
-        // `asset` is required. `tag` marks this endpoint for the Global x402 Challenge so activity
-        // is attributed on the leaderboard. VERIFY exact tag placement against the competition blog
-        // ("add a field named 'tag' to your extra field") before mainnet (build step 6).
-        extra: { asset: CONFIG.usdcAsaId, tag: CONFIG.competitionTag },
-      },
-    ],
+    // One entry per Algorand network id form, spec form first (see the CAIP-2 note in config.ts).
+    // Identical terms otherwise: same price, payTo, asset and tag.
+    accepts: CONFIG.caip2Offered.map((network) => ({
+      scheme: 'exact' as const,
+      price: opts.price ?? '$1.00',
+      network,
+      payTo: CONFIG.avmAddress,
+      // `asset` is required. `tag` attributes activity to the Global x402 Challenge leaderboard
+      // ("add a field named 'tag' to your extra field").
+      extra: { asset: CONFIG.usdcAsaId, tag: CONFIG.competitionTag },
+    })),
     // Fixed public https URL. Payment matching compares only the `accepts` terms, never this URL,
     // so it does not affect verification; it is what clients and the Bazaar catalog see.
     resource: `${CONFIG.publicBaseUrl}${opts.path}`,

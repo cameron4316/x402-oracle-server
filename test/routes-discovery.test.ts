@@ -54,3 +54,20 @@ test('both discovery declarations pass the x402 Bazaar validator', () => {
 test('the batch limit in the route config matches the batch implementation', () => {
   assert.equal(BATCH_TARGET_LIMIT, MAX_BATCH_TARGETS);
 });
+
+test('every paid route offers both Algorand network ids, spec form first, otherwise identical', async () => {
+  const { CONFIG } = await import('../src/config.js');
+  const { ALGORAND_TESTNET_CAIP2 } = await import('@x402/avm');
+  assert.equal(CONFIG.caip2, ALGORAND_TESTNET_CAIP2, 'spec form comes from @x402/avm');
+  assert.equal(CONFIG.caip2, 'algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDe');
+  assert.equal(CONFIG.caip2Legacy, 'algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=');
+  assert.ok(CONFIG.caip2Legacy.startsWith(CONFIG.caip2), 'the spec form is the legacy form truncated');
+  for (const key of Object.keys(routes) as Array<keyof typeof routes>) {
+    const accepts = routes[key].accepts;
+    assert.deepEqual(accepts.map((a) => a.network), [CONFIG.caip2, CONFIG.caip2Legacy], key);
+    const { network: _a, ...first } = accepts[0];
+    const { network: _b, ...second } = accepts[1];
+    assert.deepEqual(first, second, `${key}: the two options differ only in network`);
+    assert.equal(first.extra.tag, 'x402-global-challenge');
+  }
+});

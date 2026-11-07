@@ -136,6 +136,16 @@ function paymentRequired(res) {
   return JSON.parse(Buffer.from(res.headers.get('payment-required') ?? '', 'base64').toString('utf8'));
 }
 
+await check('402 offers both Algorand network ids, spec form first, otherwise identical', async () => {
+  const pr = paymentRequired(await get('/reliability'));
+  const nets = (pr.accepts ?? []).map((a) => a.network);
+  expect(nets.length === 2, `accepts networks ${JSON.stringify(nets)}`);
+  expect(/^algorand:[A-Za-z0-9_-]{32}$/.test(nets[0]), `first network is not the spec form: ${nets[0]}`);
+  expect(nets[1].startsWith(nets[0]) && nets[1].length > nets[0].length, `second is not the legacy form of the first: ${nets[1]}`);
+  const strip = ({ network, ...rest }) => JSON.stringify(rest);
+  expect(strip(pr.accepts[0]) === strip(pr.accepts[1]), 'the two options differ in more than the network');
+});
+
 await check('402 for GET /reliability: https resource URL + `target` declared for discovery', async () => {
   const pr = paymentRequired(await get('/reliability'));
   expect(/^https:\/\/[^/]+\/reliability$/.test(pr.resource?.url ?? ''), `resource.url ${pr.resource?.url}`);

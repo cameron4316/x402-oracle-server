@@ -24,7 +24,8 @@ import { fileURLToPath } from 'node:url';
 // --- x402 resource server wiring (mirrors the official Algorand tutorial) ---
 const facilitatorClient = new HTTPFacilitatorClient({ url: CONFIG.facilitatorUrl });
 const server = new x402ResourceServer(facilitatorClient);
-server.register(CONFIG.caip2, new ExactAvmScheme());
+// Both Algorand network id forms are offered (spec form first); see the CAIP-2 note in config.ts.
+for (const network of CONFIG.caip2Offered) server.register(network, new ExactAvmScheme());
 server.registerExtension(bazaarResourceServerExtension as unknown as ResourceServerExtension);
 
 // Signed attestations (docs/attestation.md). Unsigned until SIGNING_KEY_PATH is set; refuses to
@@ -227,6 +228,8 @@ Discovery: ${API_BASE}/.well-known/x402
 - Chain: Algorand mainnet
 - Facilitator: ${CONFIG.facilitatorUrl}
 - Network (CAIP-2): ${CONFIG.caip2}
+  (every 402 also offers the legacy full-hash form ${CONFIG.caip2Legacy} as a second, otherwise
+  identical option, for clients built before @x402/avm 2.29; pay the first one if you can)
 - Asset: USDC, ASA ${CONFIG.usdcAsaId} (6 decimals)
 - payTo: ${CONFIG.avmAddress}
 - Challenge tag: ${CONFIG.competitionTag} (present on every paid 402)

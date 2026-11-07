@@ -1,5 +1,5 @@
 import { config as loadEnv } from 'dotenv';
-import { USDC_TESTNET_ASA_ID } from '@x402/avm';
+import { ALGORAND_MAINNET_CAIP2, ALGORAND_TESTNET_CAIP2, USDC_TESTNET_ASA_ID } from '@x402/avm';
 
 loadEnv();
 
@@ -10,47 +10,45 @@ const network = (process.env.NETWORK ?? 'testnet').toLowerCase() as NetworkName;
 // Known mainnet USDC ASA id (competition spec).
 const MAINNET_USDC_ASA_ID = 31566704;
 
-// ALGORAND CAIP-2 FORM — @x402/avm is NOT buggy here; the facilitator we're deployed against is.
-// The TRUNCATED 32-char form (used elsewhere as @x402/avm's ALGORAND_TESTNET_CAIP2 export) is the
-// spec-correct CAIP-2 identifier per the Algorand CAIP-2 namespace profile — full base64 genesis
-// hashes exceed CAIP-2's length/character limits. Upstream x402-foundation/x402 already fixed this
-// (issue #2904, PR #2931, merged): @x402/avm@2.26.0's constants correctly reflect it.
+// ALGORAND NETWORK IDS (CAIP-2) — a transition, offered in BOTH forms.
 //
-// GoPlausible's hosted facilitator (facilitator.goplausible.xyz) runs GoPlausible/x402-avm, a fork
-// ~604 commits behind x402-foundation/x402:main that predates PR #2931. Its live /supported
-// endpoint (confirmed via `curl https://facilitator.goplausible.xyz/supported`) still advertises
-// the legacy, non-compliant full-hash form below. x402HTTPResourceServer's facilitator-support
-// check does an exact string match, so registering the spec-correct package constant against this
-// stale facilitator fails outright with "Facilitator does not support scheme exact on network ...".
+// Two ids are in use for each Algorand network:
+//   spec form    "algorand:" + the first 32 characters of the base64 genesis hash. The only form the
+//                x402 SDK accepts since @x402/core and @x402/avm 2.29.0 (x402-foundation/x402 #3894,
+//                which removed the legacy form). This is what @x402/avm exports as
+//                ALGORAND_MAINNET_CAIP2 / ALGORAND_TESTNET_CAIP2.
+//   legacy form  "algorand:" + the full genesis hash. What GoPlausible's facilitator used to require
+//                (reported in x402-foundation/x402 #3528), and what hosannaith-client up to 0.4.0
+//                and hosannaith-mcp up to 0.3.0 register.
+// The GoPlausible facilitator now lists both in /supported, so every 402 offers both, spec form
+// FIRST: clients on current SDKs can only pay the spec form, and existing installs of our own clients
+// keep paying the legacy one. Same price, payTo and tag on both. Drop the legacy entry once no
+// settlements use it (the remote MCP audit log records the network of every settlement).
 //
-// We override to the facilitator's legacy value below SOLELY to interoperate with the facilitator
-// as currently deployed — this is NOT the spec-correct value, it's pinned to match a known-stale
-// dependency. Reported upstream: GoPlausible/x402-avm (CAIP-2 sync issue). If/when GoPlausible
-// syncs their fork and the live facilitator starts advertising the compliant truncated form, THIS
-// OVERRIDE MUST BE REVERTED (back to importing ALGORAND_TESTNET_CAIP2 from '@x402/avm') or this
-// server will stop matching the facilitator the same way it does today.
-const FACILITATOR_TESTNET_CAIP2 = 'algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=' as const;
+// This server's own @x402 packages are pinned below 2.29 by the lockfile; 2.29+ would refuse to
+// register the legacy form. Upgrade them only together with dropping it.
+const ALGORAND_MAINNET_LEGACY = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=' as const;
+const ALGORAND_TESTNET_LEGACY = 'algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=' as const;
 
-// IMPORTANT (build step 6 — going live on mainnet):
-// Same story as FACILITATOR_TESTNET_CAIP2 above — @x402/avm's ALGORAND_MAINNET_CAIP2 export
-// ("algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k") is the spec-correct truncated CAIP-2 form, but
-// GoPlausible's hosted facilitator (still on GoPlausible/x402-avm, ~604 commits behind, predating
-// PR #2931) advertises the legacy full-hash form instead. Confirmed via a live
-// `curl https://facilitator.goplausible.xyz/supported` (2026-09-25): the mainnet entry returns
-// the value below, matching the same drift already seen on testnet. This is the authoritative
-// value the facilitator actually expects, not a guess and not the package constant. REVERT to
-// importing ALGORAND_MAINNET_CAIP2 from '@x402/avm' once GoPlausible syncs their fork and the
-// live facilitator starts advertising the compliant truncated form.
-const MAINNET_CAIP2 = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=' as const;
+type Caip2 = `${string}:${string}`;
 
-function resolveNetwork(): { caip2: `${string}:${string}`; usdcAsaId: number } {
+function resolveNetwork(): { caip2: Caip2; caip2Legacy: Caip2; usdcAsaId: number } {
   if (network === 'testnet') {
-    return { caip2: FACILITATOR_TESTNET_CAIP2, usdcAsaId: Number(USDC_TESTNET_ASA_ID) };
+    return { caip2: ALGORAND_TESTNET_CAIP2 as Caip2, caip2Legacy: ALGORAND_TESTNET_LEGACY, usdcAsaId: Number(USDC_TESTNET_ASA_ID) };
   }
   if (network === 'mainnet') {
-    return { caip2: MAINNET_CAIP2, usdcAsaId: MAINNET_USDC_ASA_ID };
+    return { caip2: ALGORAND_MAINNET_CAIP2 as Caip2, caip2Legacy: ALGORAND_MAINNET_LEGACY, usdcAsaId: MAINNET_USDC_ASA_ID };
   }
   throw new Error(`Unknown NETWORK "${network}". Use "testnet" or "mainnet".`);
+}
+
+// The spec form must be exactly the first 32 characters of the legacy form's reference; a wrong id
+// would silently stop payments, so check it at startup rather than trust either constant blindly.
+function assertSameNetwork(spec: string, legacy: string): void {
+  const [ns, ref] = [legacy.slice(0, legacy.indexOf(':')), legacy.slice(legacy.indexOf(':') + 1)];
+  if (spec !== `${ns}:${ref.slice(0, 32)}`) {
+    throw new Error(`Algorand network ids disagree: ${spec} is not the spec form of ${legacy}`);
+  }
 }
 
 function requireEnv(name: string): string {
@@ -60,10 +58,14 @@ function requireEnv(name: string): string {
 }
 
 const resolved = resolveNetwork();
+assertSameNetwork(resolved.caip2, resolved.caip2Legacy);
 
 export const CONFIG = {
   network,
+  // Spec-form CAIP-2 id (offered first) and the legacy form (offered second); see above.
   caip2: resolved.caip2,
+  caip2Legacy: resolved.caip2Legacy,
+  caip2Offered: [resolved.caip2, resolved.caip2Legacy] as const,
   usdcAsaId: resolved.usdcAsaId,
   avmAddress: requireEnv('AVM_ADDRESS'),
   facilitatorUrl: process.env.FACILITATOR_URL ?? 'https://facilitator.goplausible.xyz',

@@ -9,10 +9,15 @@ import { ExactAvmScheme } from '@x402/avm';
 // Where the paid /reliability endpoint lives. Override only for local testing.
 const BASE_URL = (process.env.HOSANNAITH_BASE_URL ?? 'https://api.hosannaith.com').replace(/\/+$/, '');
 
-// Facilitator-advertised CAIP-2 for Algorand MainNet.
-// @x402/avm ships the spec-correct *truncated* CAIP-2, but the live GoPlausible facilitator
-// advertises this legacy *full-genesis-hash* form via /supported, so payments must match it.
-const ALGORAND_MAINNET_CAIP2 = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+// Algorand MainNet network ids. The x402 SDK accepts only the spec form since @x402/avm 2.29
+// (x402-foundation/x402 #3894); older facilitator setups used the legacy full-genesis-hash form.
+// Hosannaith's 402s offer both (spec form first), so register both: the client pays the first
+// option it supports, which is the spec form, and still works against a server offering only the
+// legacy form.
+const ALGORAND_MAINNET_NETWORKS = [
+  'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k', // spec form (CAIP-2: first 32 chars of the genesis hash)
+  'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=', // legacy full-hash form
+] as const;
 
 // The oracle's response shape (mirrors the Hosannaith server's reliability check).
 interface ReliabilityResult {
@@ -45,11 +50,11 @@ function payingFetchFromMnemonic(mnemonic: string): typeof fetch {
   };
 
   const client = new x402Client();
-  client.register(ALGORAND_MAINNET_CAIP2, new ExactAvmScheme(signer));
+  for (const network of ALGORAND_MAINNET_NETWORKS) client.register(network, new ExactAvmScheme(signer));
   return wrapFetchWithPayment(fetch, client) as typeof fetch;
 }
 
-const server = new McpServer({ name: 'hosannaith', version: '0.3.0' });
+const server = new McpServer({ name: 'hosannaith', version: '0.3.1' });
 
 // --- Free tool: describe the oracle so an agent knows how to read a score ---
 server.registerTool(

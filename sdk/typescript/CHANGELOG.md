@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Pays Hosannaith with the spec-form Algorand network id (`algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k`)
+  when the server offers it, which it now does first. The x402 SDK accepts only that form since
+  `@x402/avm` 2.29. The legacy full-hash id stays registered as a fallback.
+
 ## 0.4.0
 
 - **Signed results are verified.** Every result from the oracle carries an ES256 signature. The

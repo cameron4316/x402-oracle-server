@@ -21,11 +21,15 @@ import {
 
 export { HosannaithVerificationError, getVerification, type VerificationStatus, type VerifyMode };
 
-// Facilitator-verified CAIP-2 for Algorand MainNet.
-// NOTE: @x402/avm ships the spec-correct *truncated* CAIP-2 form, but the live GoPlausible
-// facilitator advertises this legacy *full-genesis-hash* form via /supported, so payments must
-// match it. Verified live (2026-09): curl https://facilitator.goplausible.xyz/supported.
-const ALGORAND_MAINNET_CAIP2 = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+// Algorand MainNet network ids. The x402 SDK accepts only the spec form since @x402/avm 2.29
+// (x402-foundation/x402 #3894); older facilitator setups used the legacy full-genesis-hash form.
+// Hosannaith's 402s offer both (spec form first), so register both: the client pays the first
+// option it supports, which is the spec form, and still works against a server offering only the
+// legacy form.
+const ALGORAND_MAINNET_NETWORKS = [
+  'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k', // spec form (CAIP-2: first 32 chars of the genesis hash)
+  'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=', // legacy full-hash form
+] as const;
 const DEFAULT_BASE_URL = 'https://api.hosannaith.com';
 
 export interface ReliabilityDetail {
@@ -135,7 +139,7 @@ export class HosannaithClient {
           }),
       };
       const client = new x402Client();
-      client.register(ALGORAND_MAINNET_CAIP2, new ExactAvmScheme(signer));
+      for (const network of ALGORAND_MAINNET_NETWORKS) client.register(network, new ExactAvmScheme(signer));
       this.payingFetch = wrapFetchWithPayment(fetch, client) as typeof fetch;
     }
     return this.payingFetch;

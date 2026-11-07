@@ -58,7 +58,7 @@ export const routes = {
       example: { target: EXAMPLE_TARGET },
       schema: {
         properties: {
-          target: { type: 'string', format: 'uri', description: 'Full URL of the x402 endpoint to score.' },
+          target: { type: 'string', format: 'uri', maxLength: 2048, description: 'Full http(s) URL of the x402 endpoint to score.' },
         },
         required: ['target'],
         additionalProperties: false,
@@ -103,7 +103,7 @@ export const routes = {
         properties: {
           targets: {
             type: 'array',
-            items: { type: 'string', format: 'uri' },
+            items: { type: 'string', format: 'uri', maxLength: 2048 },
             minItems: 1,
             maxItems: BATCH_TARGET_LIMIT,
             description: `Endpoint URLs to score. Duplicates are removed; at most ${BATCH_TARGET_LIMIT} are scored.`,

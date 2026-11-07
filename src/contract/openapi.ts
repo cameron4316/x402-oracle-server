@@ -107,8 +107,10 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
               name: 'target',
               in: 'query',
               required: true,
-              description: 'Full URL of the x402 endpoint to score.',
-              schema: { type: 'string', format: 'uri' },
+              description:
+                'Full http(s) URL of the x402 endpoint to score. Private, loopback, link-local and reserved ' +
+                'addresses, internal host names and URLs with credentials are refused (400, before payment).',
+              schema: { type: 'string', format: 'uri', maxLength: 2048 },
             },
           ],
           responses: {
@@ -116,7 +118,7 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
               description: 'Reliability result.',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/CheckResult' } } },
             },
-            '400': problemResponse('Missing or invalid target.'),
+            '400': problemResponse('Target not accepted (see the target parameter). Returned before payment.'),
             '402': paymentRequiredResponse,
             '500': problemResponse('Internal error.'),
           },
@@ -140,8 +142,10 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
                     targets: {
                       type: 'array',
                       minItems: 1,
-                      items: { type: 'string', format: 'uri' },
-                      description: `Endpoint URLs. Duplicates are removed; at most ${opts.maxBatchTargets} are scored.`,
+                      items: { type: 'string', format: 'uri', maxLength: 2048 },
+                      description:
+                        `Endpoint URLs. Duplicates are removed; at most ${opts.maxBatchTargets} are scored. ` +
+                        'The same targets are refused as for GET /reliability (400, before payment).',
                     },
                   },
                 },
@@ -153,7 +157,7 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
               description: 'Batch result.',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/BatchResult' } } },
             },
-            '400': problemResponse('Body is not { "targets": [...] }.'),
+            '400': problemResponse('Body is not { "targets": [...] }, or a target is not accepted.'),
             '402': paymentRequiredResponse,
             '500': problemResponse('Internal error.'),
           },

@@ -1,6 +1,7 @@
 import type { CheckResult } from '../types.js';
 import { summarize, statusFromScore } from './score.js';
 import { reliabilityStore, reliabilityTargetRegistry } from './index.js';
+import { checkTarget } from './target-url.js';
 
 const DEFAULT_WINDOW_HOURS = 24;
 
@@ -24,13 +25,15 @@ export async function reliabilityBatch(rawTargets: unknown[]): Promise<BatchResu
   const windowMs = DEFAULT_WINDOW_HOURS * 3600 * 1000;
   const requested = rawTargets.length;
 
-  // Clean: keep strings, trim, drop blanks, dedupe, cap.
+  // Clean: keep allowed URLs (see target-url.ts; callers reject the rest before payment), trim,
+  // dedupe, cap.
   const seen = new Set<string>();
   const targets: string[] = [];
   for (const raw of rawTargets) {
-    if (typeof raw !== 'string') continue;
-    const url = raw.trim();
-    if (!url || seen.has(url)) continue;
+    const checked = checkTarget(raw);
+    if (!checked.ok) continue;
+    const url = checked.target;
+    if (seen.has(url)) continue;
     seen.add(url);
     targets.push(url);
     if (targets.length >= MAX_BATCH_TARGETS) break;

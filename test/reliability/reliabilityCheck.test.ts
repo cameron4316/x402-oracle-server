@@ -147,3 +147,25 @@ test('real check results (one-shot and history) match the published JSON Schema'
   assert.equal((withHistory.detail as { availability_pct: number }).availability_pct, 100);
   assert.equal(typeof (withHistory.detail as { p99LatencyMs: unknown }).p99LatencyMs, 'number');
 });
+
+test('a disallowed target is refused: never probed, stored or enrolled', async () => {
+  const fetchMock = mockFetch(402);
+  for (const target of ['http://169.254.169.254/latest/meta-data', 'http://localhost:4021/health', 'file:///etc/passwd']) {
+    await assert.rejects(() => reliabilityCheck.run(target), /target rejected/);
+  }
+  fetchMock.restore();
+  assert.equal(fetchMock.callCount(), 0, 'a refused target must never be fetched');
+  const observed = (() => { try { return readFileSync(observationLog, 'utf8'); } catch { return ''; } })();
+  assert.ok(!observed.includes('169.254.169.254') && !observed.includes('localhost:4021'));
+  const enrolled = (() => { try { return readFileSync(targetsFile, 'utf8'); } catch { return ''; } })();
+  assert.ok(!enrolled.includes('169.254.169.254') && !enrolled.includes('localhost:4021'));
+});
+
+test('a batch skips disallowed targets and enrolls only the allowed ones', async () => {
+  const { reliabilityBatch } = await import('../../src/checks/reliability/batch.js');
+  const batch = await reliabilityBatch(['http://10.0.0.1/x', 'https://batch.example/allowed', 'http://[::1]/', 42]);
+  assert.deepEqual(batch.results.map((r) => r.target), ['https://batch.example/allowed']);
+  const enrolled = readFileSync(targetsFile, 'utf8');
+  assert.ok(enrolled.includes('https://batch.example/allowed'));
+  assert.ok(!enrolled.includes('10.0.0.1') && !enrolled.includes('::1'));
+});

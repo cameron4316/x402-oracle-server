@@ -5,6 +5,7 @@ import { summarize, statusFromScore } from './score.js';
 import { probe } from './monitor.js';
 import { TargetRegistry } from './targets.js';
 import { CONFIG } from '../../config.js';
+import { assertTarget } from './target-url.js';
 
 // Single shared store instance — the monitor writes to it, the paid check reads from it.
 const store = new JsonlObservationStore(CONFIG.observationLog);
@@ -26,7 +27,10 @@ export const reliabilityCheck: Check = {
       "detail.confidence field — 'history' vs 'one-shot') and is enrolled for ongoing monitoring."
     );
   },
-  async run(target: string): Promise<CheckResult> {
+  async run(rawTarget: string): Promise<CheckResult> {
+    // Callers (HTTP API, remote MCP) reject a disallowed target before payment; this is the backstop
+    // that keeps one from ever being probed or enrolled.
+    const target = assertTarget(rawTarget);
     const windowMs = DEFAULT_WINDOW_HOURS * 3600 * 1000;
     let obs = await store.readForTarget(target, windowMs);
     let confidence: 'history' | 'one-shot' = 'history';

@@ -81,4 +81,7 @@ export const CONFIG = {
     .filter(Boolean),
   monitorIntervalSeconds: Number(process.env.MONITOR_INTERVAL_SECONDS ?? 60),
   observationLog: process.env.OBSERVATION_LOG ?? './data/observations.jsonl',
+  // Remote MCP audit log (src/mcp-audit.ts): one line per tool call, rotated to <file>.1 past the cap.
+  mcpAuditLog: process.env.MCP_AUDIT_LOG ?? './data/mcp-audit.jsonl',
+  mcpAuditMaxBytes: Number(process.env.MCP_AUDIT_MAX_BYTES ?? 20 * 1024 * 1024),
 } as const;

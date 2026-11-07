@@ -55,6 +55,14 @@ const header = res.headers.get('payment-response') ?? res.headers.get('x-payment
 const receipt = header ? JSON.parse(Buffer.from(header, 'base64').toString('utf8')) : null;
 const body = (await res.json().catch(() => null)) as Record<string, any> | null;
 
+// A 402 after paying means the payment was rejected (no settlement, nothing charged). Show why.
+if (res.status === 402) {
+  const required = res.headers.get('payment-required');
+  const decoded = required ? JSON.parse(Buffer.from(required, 'base64').toString('utf8')) : null;
+  console.log(`      rejected: ${JSON.stringify(decoded?.error ?? body?.error ?? null)}`);
+  console.log(`      offered networks: ${JSON.stringify((decoded?.accepts ?? []).map((a: any) => a.network))}`);
+}
+
 let ok = true;
 const check = (label: string, pass: boolean, detail: string) => {
   ok &&= pass;

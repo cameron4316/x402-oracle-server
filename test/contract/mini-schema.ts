@@ -6,7 +6,7 @@ type Schema = Record<string, unknown>;
 const ANNOTATIONS = new Set(['$schema', '$id', 'title', 'description', 'format']);
 const IMPLEMENTED = new Set([
   'type', 'enum', 'const', 'required', 'properties', 'items', 'anyOf',
-  'minimum', 'maximum', 'exclusiveMinimum', 'pattern', 'minItems',
+  'minimum', 'maximum', 'exclusiveMinimum', 'pattern', 'minItems', 'maxItems',
 ]);
 
 function typeOf(v: unknown): string {
@@ -59,6 +59,7 @@ export function validate(schema: Schema, value: unknown, path = '$'): string[] {
   }
   if (Array.isArray(value)) {
     if (typeof schema.minItems === 'number' && value.length < schema.minItems) errors.push(`${path}: fewer than ${schema.minItems} items`);
+    if (typeof schema.maxItems === 'number' && value.length > schema.maxItems) errors.push(`${path}: more than ${schema.maxItems} items`);
     if (schema.items) value.forEach((item, i) => errors.push(...validate(schema.items as Schema, item, `${path}[${i}]`)));
   }
   return errors;

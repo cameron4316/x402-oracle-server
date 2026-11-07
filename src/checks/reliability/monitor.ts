@@ -26,16 +26,25 @@ export type Resolver = (host: string) => Promise<Array<{ address: string }>>;
 const systemResolver: Resolver = (host) => lookup(host, { all: true, verbatim: true });
 
 /** Refuses a URL the target rules reject, or whose host currently resolves to a refused address. */
-async function assertProbeable(url: string, resolve: Resolver): Promise<void> {
+async function assertProbeable(url: string, resolve: Resolver, signal: AbortSignal): Promise<void> {
   const checked = checkTarget(url);
   if (!checked.ok) throw new RefusedHopError(`refused: ${checked.reason}`);
   const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) return; // literal addresses were already checked above
   let addresses: Array<{ address: string }>;
   try {
-    addresses = await resolve(host);
+    // The probe's timeout covers resolution too: a slow resolver must not hold a tick past it.
+    addresses = await Promise.race([
+      resolve(host),
+      new Promise<never>((_, reject) => {
+        if (signal.aborted) reject(signal.reason);
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+    ]);
   } catch {
-    return; // unresolvable: let fetch fail exactly as it always has
+    // Unresolvable (or timed out): let fetch fail, or abort, exactly as it always has.
+    signal.throwIfAborted();
+    return;
   }
   if (addresses.some((a) => isRefusedAddress(a.address))) {
     throw new RefusedHopError('refused: host resolves to a private or reserved address');
@@ -94,7 +103,8 @@ async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number,
   let redirects = 0;
   try {
     for (;;) {
-      await assertProbeable(url, resolve);
+      await assertProbeable(url, resolve, controller.signal);
+      controller.signal.throwIfAborted();
       const hopStarted = Date.now();
       const res = await fetch(url, { method: currentMethod, redirect: 'manual', signal: controller.signal });
       latencyMs += Date.now() - hopStarted;

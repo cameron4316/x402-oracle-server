@@ -191,6 +191,9 @@ const INFO_TEXT = [
   '    availability_pct, error_rate_pct, protocol_conformance_pct, score_normalized: the same',
   '      numbers in OpenEAGO SLO terms (error_rate_pct = % of probes that were 5xx or unreachable;',
   '      score_normalized = score / 100)',
+  '    mainnetPayablePct, discoverablePct, acceptedNetworks: what the 402s said about payment',
+  '      (informational, not scored): share payable on a known mainnet, share with the bazaar',
+  '      discovery extension, and the networks named',
   '  }',
   'JSON Schema: https://api.hosannaith.com/schema/check-result.json',
   ...(signer

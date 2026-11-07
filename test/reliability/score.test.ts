@@ -87,3 +87,37 @@ test('existing fields and the score are unchanged by the additions', () => {
     { observations: 10, windowHours: 24, uptimePct: 100, correct402Pct: 100, p50LatencyMs: 100, p95LatencyMs: 100, score: 99 },
   );
 });
+
+test('payment signals: mainnetPayablePct, discoverablePct and networks over recorded 402s only', () => {
+  const MAIN = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+  const TEST = 'algorand:SGO1GKSzyE7IEPItTxCByw9x8FmnrCDexi9/cOUJOiI=';
+  const recorded = (networks: string[], bazaar = false, parsed = true) =>
+    obs(1, { paymentRequiredParsed: parsed, acceptedNetworks: networks, hasBazaarExtension: bazaar, x402Version: 2 })[0];
+  const s = summarize(
+    [
+      ...obs(6), // older 402s without recorded requirements: not counted
+      recorded([MAIN], true),
+      recorded([MAIN]),
+      recorded([TEST]),
+      recorded([], false, false),
+    ],
+    24,
+  );
+  assert.equal(s.paymentRequirementsSamples, 4);
+  assert.equal(s.mainnetPayablePct, 50);
+  assert.equal(s.discoverablePct, 25);
+  assert.deepEqual(s.acceptedNetworks, [MAIN, TEST].sort());
+});
+
+test('payment signals never move the score', () => {
+  const base = obs(10);
+  const withTestnetOnly = base.map((o) => ({ ...o, paymentRequiredParsed: true, acceptedNetworks: ['eip155:84532'] }));
+  const a = summarize(base, 24);
+  const b = summarize(withTestnetOnly, 24);
+  assert.equal(b.score, a.score);
+  assert.equal(b.correct402Pct, a.correct402Pct);
+  assert.equal(b.mainnetPayablePct, 0);
+  assert.equal(a.mainnetPayablePct, null);
+  assert.equal(a.paymentRequirementsSamples, 0);
+  assert.equal(a.acceptedNetworks, null);
+});

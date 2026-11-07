@@ -12,6 +12,13 @@ export interface Observation {
   demandedPayment: boolean; // healthy x402 endpoint answers an unpaid GET with 402
   latencyMs: number | null;
   error?: string;
+  // On a 402 only (recorded since the payment-network update; absent on older observations):
+  // what the payment requirements said, as observed. See x402-network.ts.
+  paymentRequiredParsed?: boolean; // requirements parse, with at least one `accepts` entry
+  x402Version?: number | null;
+  acceptedNetworks?: string[]; // accepts[].network exactly as sent, never normalized on write
+  hasBazaarExtension?: boolean; // v2 extensions.bazaar present (discovery only, never scored)
+  redirects?: number; // redirects followed to reach the final response, when any
 }
 
 export interface ObservationStore {

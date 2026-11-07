@@ -156,7 +156,7 @@ export function withAudit<A, E, R extends ToolResult>(
   log: AuditLog,
   tool: string,
   kind: 'free' | 'paid',
-  callback: (args: A, extra: E) => Promise<R>,
+  callback: (args: A, extra: E) => R | Promise<R>,
   now: () => number = Date.now,
 ): (args: A, extra: E) => Promise<R> {
   return async (args, extra) => {

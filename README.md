@@ -132,6 +132,17 @@ Add it to an MCP client's config:
 
 See [`mcp/`](mcp/) for the MCP server, its tools, and full setup docs.
 
+There is also a **hosted remote MCP server** at `https://api.hosannaith.com/mcp` (Streamable HTTP,
+paid per call via x402 MCP). Its tools carry MCP annotations (paid tools: read-only, not destructive,
+not idempotent, open-world; the one side effect is that a target with no history gets one live probe
+and is enrolled for monitoring). Every call is recorded in an audit log with its on-chain settlement,
+or the quote offered when no payment was made; payment payloads and URL query strings are never
+logged.
+
+Targets must be public http(s) URLs. Private, loopback, link-local and reserved addresses, internal
+host names and URLs with credentials are refused before any payment, on the HTTP API and both MCP
+servers.
+
 ## Architecture and vision
 
 The architecture is deliberately **pluggable**: every paid product implements the `Check`

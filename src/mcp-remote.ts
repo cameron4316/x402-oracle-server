@@ -3,7 +3,13 @@ import { serve } from '@hono/node-server';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { z } from 'zod';
-import { createPaymentWrapper, x402ResourceServer, type PaymentWrapperConfig } from '@x402/mcp';
+import {
+  createPaymentWrapper,
+  MCP_PAYMENT_META_KEY,
+  MCP_PAYMENT_RESPONSE_META_KEY,
+  x402ResourceServer,
+  type PaymentWrapperConfig,
+} from '@x402/mcp';
 import { HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactAvmScheme } from '@x402/avm/exact/server';
 import { declareDiscoveryExtension } from '@x402-avm/extensions';
@@ -13,10 +19,19 @@ import { reliabilityCheck } from './checks/reliability/index.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
 import { loadSigner } from './attest/keyset.js';
 import { attest, attestBatch } from './attest/sign.js';
+import { checkTarget, MAX_TARGET_LENGTH } from './checks/reliability/target-url.js';
+import { AuditLog, PAYMENT_META_KEY, PAYMENT_RESPONSE_META_KEY, withAudit } from './mcp-audit.js';
 
 // Same signing key and rules as the HTTP API (docs/attestation.md).
 const signer = loadSigner();
 console.log(signer ? `[attest] signing results with key ${signer.kid}` : '[attest] SIGNING_KEY_PATH not set: results are unsigned');
+
+// Every tool call is recorded in the audit log (src/mcp-audit.ts). Its payment-meta keys must match
+// the x402 MCP package's, or paid calls would be misclassified.
+if (PAYMENT_META_KEY !== MCP_PAYMENT_META_KEY || PAYMENT_RESPONSE_META_KEY !== MCP_PAYMENT_RESPONSE_META_KEY) {
+  throw new Error('mcp-audit payment meta keys no longer match @x402/mcp');
+}
+const audit = new AuditLog(CONFIG.mcpAuditLog, CONFIG.mcpAuditMaxBytes);
 
 // Remote, x402-gated MCP server (Streamable HTTP) — runs as its own process (hosannaith-mcp.service
 // on :4022, nginx /mcp) so a crash or spike here never touches the live reliability API on :4021.
@@ -106,10 +121,11 @@ const SINGLE: PaidTool = {
     'Paid — $1.00 USDC per call via x402 on Algorand mainnet. Returns the Hosannaith reliability ' +
     'score (0-100: uptime, correct 402 behaviour, latency percentiles) for a target x402 endpoint ' +
     'URL so you can decide whether to trust it before routing payment to it. Same JSON as ' +
-    'GET https://api.hosannaith.com/reliability.',
+    'GET https://api.hosannaith.com/reliability. Side effect: a target with no monitoring history gets ' +
+    'one live unpaid probe and is enrolled for ongoing monitoring. Only public http(s) URLs are accepted.',
   inputSchema: {
     type: 'object',
-    properties: { target: { type: 'string', format: 'uri' } },
+    properties: { target: { type: 'string', format: 'uri', maxLength: MAX_TARGET_LENGTH } },
     required: ['target'],
   },
   exampleInput: { target: 'https://x402.goplausible.xyz/examples/weather' },
@@ -123,11 +139,17 @@ const BATCH: PaidTool = {
     `Paid — $7.00 USDC flat per call via x402 on Algorand mainnet, for up to ${MAX_BATCH_TARGETS} ` +
     'targets. Scores many x402 endpoints in one call (same per-target shape as ' +
     'check_x402_reliability). Monitored targets return a history-based score; unmonitored targets ' +
-    'return "unknown" and are enrolled for ongoing monitoring.',
+    'return "unknown" and are enrolled for ongoing monitoring (a side effect). Only public http(s) URLs ' +
+    'are accepted.',
   inputSchema: {
     type: 'object',
     properties: {
-      targets: { type: 'array', items: { type: 'string', format: 'uri' }, minItems: 1, maxItems: MAX_BATCH_TARGETS },
+      targets: {
+        type: 'array',
+        items: { type: 'string', format: 'uri', maxLength: MAX_TARGET_LENGTH },
+        minItems: 1,
+        maxItems: MAX_BATCH_TARGETS,
+      },
     },
     required: ['targets'],
   },
@@ -192,6 +214,34 @@ const INFO_TEXT = [
 
 const json = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }] });
 
+// A target the oracle will probe (src/checks/reliability/target-url.ts). The MCP SDK validates
+// arguments before calling the tool, so a refused target never reaches the payment wrapper: the
+// caller gets an error and pays nothing.
+const targetUrl = z
+  .string()
+  .max(MAX_TARGET_LENGTH)
+  .url()
+  .refine((t) => checkTarget(t).ok, {
+    message:
+      'Target not accepted: it must be a public http(s) URL (no credentials, internal host names, or ' +
+      'private, loopback, link-local or reserved addresses).',
+  });
+
+// Tool annotations (MCP spec). The paid tools only READ scores, but each call pays and may probe a
+// new target live, so they are not idempotent, and they reach out to third-party endpoints.
+const PAID_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true,
+} as const;
+const INFO_TOOL_ANNOTATIONS = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
+
 // Fetches the facilitator's /supported (feePayer etc.) and builds the wrappers once at startup.
 async function buildPaidTools() {
   await resourceServer.initialize();
@@ -226,8 +276,9 @@ function buildMcpServer(paid: PaidTools): McpServer {
         'Free. Explains what the Hosannaith x402 reliability oracle returns, what the paid tools cost, ' +
         'and how an agent should act on a score. Call this once before check_x402_reliability.',
       inputSchema: {},
+      annotations: INFO_TOOL_ANNOTATIONS,
     },
-    async () => ({ content: [{ type: 'text', text: INFO_TEXT }] }),
+    withAudit(audit, 'get_hosannaith_info', 'free', async () => ({ content: [{ type: 'text' as const, text: INFO_TEXT }] })),
   );
 
   server.registerTool(
@@ -236,14 +287,12 @@ function buildMcpServer(paid: PaidTools): McpServer {
       title: 'Check an x402 endpoint reliability score',
       description: SINGLE.description,
       inputSchema: {
-        target: z
-          .string()
-          .url()
-          .describe('The full https URL of the x402 endpoint to evaluate, e.g. https://api.example.com/resource'),
+        target: targetUrl.describe('The full https URL of the x402 endpoint to evaluate, e.g. https://api.example.com/resource'),
       },
+      annotations: PAID_TOOL_ANNOTATIONS,
       _meta: priceMeta(SINGLE, paid.singleCfg.accepts),
     },
-    paid.single,
+    withAudit(audit, SINGLE.name, 'paid', paid.single),
   );
 
   server.registerTool(
@@ -253,14 +302,15 @@ function buildMcpServer(paid: PaidTools): McpServer {
       description: BATCH.description,
       inputSchema: {
         targets: z
-          .array(z.string().url())
+          .array(targetUrl)
           .min(1)
           .max(MAX_BATCH_TARGETS)
           .describe(`Up to ${MAX_BATCH_TARGETS} x402 endpoint URLs to score in one paid call.`),
       },
+      annotations: PAID_TOOL_ANNOTATIONS,
       _meta: priceMeta(BATCH, paid.batchCfg.accepts),
     },
-    paid.batch,
+    withAudit(audit, BATCH.name, 'paid', paid.batch),
   );
 
   return server;

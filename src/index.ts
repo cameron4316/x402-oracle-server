@@ -11,6 +11,7 @@ import { CONFIG } from './config.js';
 import { routes } from './routes.config.js';
 import { getCheck } from './checks/registry.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
+import { checkTarget } from './checks/reliability/target-url.js';
 import { PUBLISHED_SCHEMAS } from './contract/schema.js';
 import { buildOpenApi, type PaidRouteLike } from './contract/openapi.js';
 import { PROBLEM_CONTENT_TYPE, problem } from './contract/problem.js';
@@ -51,6 +52,44 @@ app.onError((err, c) => {
   return problemResponse(c, 500);
 });
 app.notFound((c) => problemResponse(c, 404, `No route for ${c.req.method} ${c.req.path}`));
+
+// Targets we will not probe (not http(s), too long, credentials, private or reserved addresses: see
+// checks/reliability/target-url.ts) are rejected BEFORE the payment gate, so nobody pays for them.
+// A request with no target at all still gets the 402, so discovery crawlers that call the bare
+// resource URL keep seeing the payment requirements.
+app.get('/reliability', async (c, next) => {
+  const target = c.req.query('target');
+  if (target !== undefined) {
+    const checked = checkTarget(target);
+    if (!checked.ok) return problemResponse(c, 400, `Target not accepted: ${checked.reason}.`);
+  }
+  await next();
+});
+// Same for a batch, from a clone of the body (the handler still reads the original). Only bodies
+// with a declared length up to PRECHECK_MAX_BYTES are parsed before payment, so an unpaid caller
+// cannot make us parse arbitrarily large JSON; anything else goes on to the payment gate, and the
+// batch skips disallowed targets after payment.
+const PRECHECK_MAX_BYTES = 256 * 1024;
+app.post('/reliability/batch', async (c, next) => {
+  const length = Number(c.req.header('content-length') ?? NaN);
+  if (Number.isFinite(length) && length > 0 && length <= PRECHECK_MAX_BYTES) {
+    let targets: unknown;
+    try {
+      targets = ((await c.req.raw.clone().json()) as { targets?: unknown } | null)?.targets;
+    } catch {
+      targets = undefined; // malformed: left to the handler, as before
+    }
+    if (Array.isArray(targets)) {
+      const rejected = targets.map(checkTarget).filter((r) => !r.ok);
+      if (rejected.length > 0) {
+        const shown = rejected.slice(0, 5).map((r) => `${r.target} (${r.reason})`).join('; ');
+        const more = rejected.length > 5 ? `; and ${rejected.length - 5} more` : '';
+        return problemResponse(c, 400, `${rejected.length} target(s) not accepted: ${shown}${more}.`);
+      }
+    }
+  }
+  await next();
+});
 
 // Payment gate for the declared paid routes.
 app.use(paymentMiddleware(routes, server));
@@ -204,7 +243,9 @@ GET /reliability?target=<x402-endpoint-url>   -   $1.00 (1000000 uUSDC)
 Score the reliability of a target x402 endpoint.
 
 Request
-- target (query, required): full URL of the x402 endpoint to score.
+- target (query, required): full http(s) URL of the x402 endpoint to score (max 2048 characters).
+  Refused with a 400 BEFORE payment: private, loopback, link-local and reserved addresses, internal
+  host names (localhost, *.local, *.internal, ...), URLs with credentials, and non-http(s) URLs.
 
 Response (application/json)
 {

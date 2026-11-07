@@ -5,8 +5,9 @@
 //   node scripts/smoke-free-routes.mjs http://localhost:4021        # CI, testnet config
 //   node scripts/smoke-free-routes.mjs https://api.hosannaith.com   # after a deploy
 //
-// Checks the free contract routes, Problem Details errors, and that the paid routes still answer
-// an unpaid request with 402 + a PAYMENT-REQUIRED header (i.e. the payment gate is untouched).
+// Checks the free contract routes, Problem Details errors, that the paid routes still answer an
+// unpaid request with 402 + a PAYMENT-REQUIRED header (i.e. the payment gate is untouched), and that
+// targets we refuse to probe get a 400 before any payment is asked for.
 
 const base = (process.argv[2] ?? '').replace(/\/+$/, '');
 if (!/^https?:\/\//.test(base)) {
@@ -154,6 +155,25 @@ await check('POST /reliability/batch (unpaid) -> 402: https resource URL + JSON 
   expect(/^https:\/\/[^/]+\/reliability\/batch$/.test(pr.resource?.url ?? ''), `resource.url ${pr.resource?.url}`);
   const input = pr.extensions?.bazaar?.info?.input ?? {};
   expect(input.bodyType === 'json' && Array.isArray(input.body?.targets), `input ${JSON.stringify(input)}`);
+});
+
+await check('GET /reliability with a private target -> 400 Problem Details before payment', async () => {
+  const res = await get('/reliability?target=' + encodeURIComponent('http://169.254.169.254/latest/meta-data'));
+  expect(res.status === 400, `status ${res.status}`);
+  expect(!res.headers.get('payment-required'), 'a refused target must not get a payment requirement');
+  expect(ctype(res) === 'application/problem+json', `content-type ${ctype(res)}`);
+  expect(/not accepted/.test((await res.json()).detail ?? ''), 'detail does not explain the refusal');
+});
+
+await check('POST /reliability/batch with a private target -> 400 Problem Details before payment', async () => {
+  const res = await get('/reliability/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targets: ['https://example.com/x402', 'http://127.0.0.1:4021/health'] }),
+  });
+  expect(res.status === 400, `status ${res.status}`);
+  expect(!res.headers.get('payment-required'), 'a refused target must not get a payment requirement');
+  expect(/127\.0\.0\.1/.test((await res.json()).detail ?? ''), 'detail does not name the refused target');
 });
 
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');

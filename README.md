@@ -61,6 +61,9 @@ USDC on Algorand via the GoPlausible facilitator and return JSON like:
 | `correct402Pct` | Of the probes where the endpoint made a payment decision (a `402`, or serving an unpaid `2xx`), the share that correctly answered `402`. Other `4xx` (e.g. a `400` because our probe sends no input) are indeterminate and excluded. `null` if no probe was determinate. |
 | `p50/p95/p99LatencyMs` | Latency percentiles of serving probes. `p99LatencyMs` is `null` below 20 samples (it would just be the slowest one); below 20 samples `p95LatencyMs` equals the slowest sample. |
 | `confidence` | `history` (accumulated monitoring) · `one-shot` (first sighting, one live probe, `score: null`) · `pending` (batch only: no history yet, now enrolled). |
+| `mainnetPayablePct` | Of the `402`s that recorded their x402 payment requirements (`paymentRequirementsSamples`), the share whose requirements parse and name a known mainnet. A `402` alone proves gating, not that the endpoint can be paid on a mainnet (some answer with testnet-only requirements). Informational: not part of the score. |
+| `discoverablePct` | Of those `402`s, the share carrying the x402 bazaar discovery extension. Informational, never a score input. |
+| `acceptedNetworks` | Payment networks those `402`s named, exactly as sent (CAIP-2 ids or x402 v1 names). |
 
 ### OpenEAGO SLO view
 
@@ -141,7 +144,8 @@ logged.
 
 Targets must be public http(s) URLs. Private, loopback, link-local and reserved addresses, internal
 host names and URLs with credentials are refused before any payment, on the HTTP API and both MCP
-servers.
+servers. When probing, every redirect hop is checked and host names are resolved first, so a public
+URL cannot redirect or resolve a probe into a private network.
 
 ## Architecture and vision
 

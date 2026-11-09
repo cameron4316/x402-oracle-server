@@ -91,6 +91,28 @@ export const reliabilityDetailSchema = {
       maximum: 1,
       description: 'The 0-100 score rescaled to [0, 1] (score / 100).',
     },
+    paymentRequirementsSamples: {
+      type: 'integer',
+      minimum: 0,
+      description:
+        '402 probes in the window that recorded their x402 payment requirements (recorded since ' +
+        'November 2026; older 402s are not counted). Denominator of the two fields below.',
+    },
+    mainnetPayablePct: percent(
+      'Of those 402s, the share whose payment requirements parse and name at least one known mainnet ' +
+        '(e.g. Algorand, Base, Solana mainnet). An endpoint can answer 402 yet only accept testnet ' +
+        'payment. Informational: not part of the score. Null when no 402 recorded its requirements.',
+    ),
+    discoverablePct: percent(
+      'Of those 402s, the share carrying the x402 v2 bazaar discovery extension (catalog metadata). ' +
+        'Informational, never a score input: many correctly gated endpoints omit it.',
+    ),
+    acceptedNetworks: {
+      type: ['array', 'null'],
+      items: { type: 'string' },
+      maxItems: 10,
+      description: 'Payment networks the 402s named in the window, exactly as sent (CAIP-2 or x402 v1 names).',
+    },
   },
 } as const;
 

@@ -1,4 +1,5 @@
 import type { Observation } from './store.js';
+import { payableOnMainnet } from './x402-network.js';
 import type { CheckStatus } from '../types.js';
 
 // Map a 0-100 composite score to a status. Shared by the single check and the batch so the
@@ -27,6 +28,14 @@ export interface ReliabilitySummary {
   error_rate_pct: number | null; // = 100 - uptimePct: % of probes that were 5xx or unreachable
   protocol_conformance_pct: number | null; // = correct402Pct
   score_normalized: number | null; // = score / 100, in [0, 1]
+
+  // --- What the 402s said about payment (informational; NOT part of the score) ---
+  // Over the 402 probes that recorded their payment requirements (the monitor records them since the
+  // payment-network update; older 402s are not counted). All null when there are none.
+  paymentRequirementsSamples: number; // 402 probes with recorded requirements
+  mainnetPayablePct: number | null; // requirements parse AND name at least one known mainnet
+  discoverablePct: number | null; // carry the x402 v2 bazaar discovery extension
+  acceptedNetworks: string[] | null; // every network seen in the window, as sent (sorted, max 10)
 }
 
 // Don't emit a score we can't stand behind. Tune as your history grows.
@@ -83,7 +92,30 @@ export function summarize(obs: Observation[], windowHours: number): ReliabilityS
     firstObservedAt: obs[0]?.at ?? null,
     lastObservedAt: obs[obs.length - 1]?.at ?? null,
     ...sloAliases(uptimePct, correct402Pct, score),
+    ...paymentSignals(obs),
   };
+}
+
+// A 402 only proves an endpoint is gated. Whether it can actually be PAID on a mainnet is a separate
+// question (an endpoint can answer 402 with testnet-only requirements). Surfaced on its own, not
+// folded into correct402Pct or the score, so existing scores do not move.
+function paymentSignals(obs: Observation[]) {
+  const recorded = obs.filter((o) => o.httpStatus === 402 && o.paymentRequiredParsed !== undefined);
+  if (recorded.length === 0) return noPaymentSignals();
+  const payable = recorded.filter((o) => o.paymentRequiredParsed && payableOnMainnet(o.acceptedNetworks ?? [])).length;
+  const discoverable = recorded.filter((o) => o.hasBazaarExtension === true).length;
+  const networks = new Set<string>();
+  for (const o of recorded) for (const n of o.acceptedNetworks ?? []) networks.add(n);
+  return {
+    paymentRequirementsSamples: recorded.length,
+    mainnetPayablePct: pct(payable, recorded.length),
+    discoverablePct: pct(discoverable, recorded.length),
+    acceptedNetworks: [...networks].sort().slice(0, 10),
+  };
+}
+
+function noPaymentSignals() {
+  return { paymentRequirementsSamples: 0, mainnetPayablePct: null, discoverablePct: null, acceptedNetworks: null };
 }
 
 // OpenEAGO SLO view of the same numbers. Pure aliases: no new measurement, null-preserving.
@@ -114,6 +146,7 @@ function emptySummary(windowHours: number): ReliabilitySummary {
     firstObservedAt: null,
     lastObservedAt: null,
     ...sloAliases(null, null, null),
+    ...noPaymentSignals(),
   };
 }
 

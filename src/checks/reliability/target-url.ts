@@ -10,8 +10,8 @@
 // Validation only: an accepted target is kept exactly as sent (trimmed), because existing history
 // is keyed by that string; normalizing it would split an endpoint's history in two.
 //
-// Known limit: a public host name that resolves to (or redirects to) a private address is not caught
-// here. That needs resolution at probe time in the monitor, which is changed separately.
+// A public host name that resolves (or redirects) to a refused address is caught at probe time:
+// probe() in monitor.ts resolves every hop with isRefusedAddress() and follows redirects itself.
 import { BlockList, isIP } from 'node:net';
 
 export const MAX_TARGET_LENGTH = 2048;
@@ -51,6 +51,11 @@ for (const [net, prefix] of [
 const INTERNAL_NAME = /(^|\.)(localhost|local|internal|intranet|lan|home\.arpa)$/i;
 
 export type TargetCheck = { ok: true; target: string } | { ok: false; target: string; reason: string };
+
+/** Whether an IP address (v4 or v6, no brackets) is in a refused range. Non-IPs return false. */
+export function isRefusedAddress(ip: string): boolean {
+  return blockedAddress(ip);
+}
 
 function blockedAddress(host: string): boolean {
   const family = isIP(host);

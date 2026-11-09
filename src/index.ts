@@ -268,7 +268,11 @@ Response (application/json)
     "availability_pct": <number 0-100 | null>,
     "error_rate_pct": <number 0-100 | null>,
     "protocol_conformance_pct": <number 0-100 | null>,
-    "score_normalized": <number 0-1 | null>
+    "score_normalized": <number 0-1 | null>,
+    "paymentRequirementsSamples": <int>,
+    "mainnetPayablePct": <number 0-100 | null>,
+    "discoverablePct": <number 0-100 | null>,
+    "acceptedNetworks": [<network id>, ...] | null
   },
   "observedAt": "<RFC 3339 UTC timestamp>"
 }
@@ -281,6 +285,10 @@ Field notes
 - OpenEAGO SLO aliases (same numbers, null when their source is null):
   availability_pct = uptimePct; error_rate_pct = 100 - uptimePct (5xx or unreachable);
   protocol_conformance_pct = correct402Pct; score_normalized = score / 100.
+- Payment signals (informational, NOT part of the score), over the 402s that recorded their x402
+  payment requirements (paymentRequirementsSamples): mainnetPayablePct = share whose requirements
+  parse and name a known mainnet (a 402 can be testnet-only); discoverablePct = share carrying the
+  x402 bazaar discovery extension; acceptedNetworks = networks named, as sent.
 - Responses are additive-only: new optional fields may appear; existing ones never change.
 
 How to use the result

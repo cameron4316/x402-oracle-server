@@ -121,3 +121,21 @@ test('payment signals never move the score', () => {
   assert.equal(a.paymentRequirementsSamples, 0);
   assert.equal(a.acceptedNetworks, null);
 });
+
+test('currentSdkPayablePct and algorandIdForm: legacy-only Algorand is payable on mainnet but not by the current SDK', () => {
+  const LEGACY = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8=';
+  const SPEC = 'algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k';
+  const rec = (networks: string[]) => obs(1, { paymentRequiredParsed: true, acceptedNetworks: networks, hasBazaarExtension: false, x402Version: 2 })[0];
+  const legacyOnly = summarize([rec([LEGACY]), rec([LEGACY])], 24);
+  assert.equal(legacyOnly.mainnetPayablePct, 100);
+  assert.equal(legacyOnly.currentSdkPayablePct, 0);
+  assert.equal(legacyOnly.algorandIdForm, 'legacy');
+  const both = summarize([rec([SPEC, LEGACY])], 24);
+  assert.equal(both.currentSdkPayablePct, 100);
+  assert.equal(both.algorandIdForm, 'both');
+  const withBase = summarize([rec([LEGACY, 'eip155:8453'])], 24);
+  assert.equal(withBase.currentSdkPayablePct, 100, 'Base keeps it payable');
+  assert.equal(withBase.algorandIdForm, 'legacy');
+  assert.equal(summarize(obs(5), 24).algorandIdForm, null);
+  assert.equal(summarize(obs(5), 24).score, summarize([...obs(5)].map((o) => ({ ...o, paymentRequiredParsed: true, acceptedNetworks: [LEGACY] })), 24).score, 'never moves the score');
+});

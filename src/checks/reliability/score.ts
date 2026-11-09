@@ -1,5 +1,5 @@
 import type { Observation } from './store.js';
-import { payableOnMainnet } from './x402-network.js';
+import { algorandMainnetIdForm, payableByCurrentSdk, payableOnMainnet, type AlgorandIdForm } from './x402-network.js';
 import type { CheckStatus } from '../types.js';
 
 // Map a 0-100 composite score to a status. Shared by the single check and the batch so the
@@ -36,6 +36,12 @@ export interface ReliabilitySummary {
   mainnetPayablePct: number | null; // requirements parse AND name at least one known mainnet
   discoverablePct: number | null; // carry the x402 v2 bazaar discovery extension
   acceptedNetworks: string[] | null; // every network seen in the window, as sent (sorted, max 10)
+  // Requirements payable on a known mainnet in a form the CURRENT x402 SDK accepts (@x402/core and
+  // @x402/avm 2.29+ refuse Algorand's legacy full-hash id). Lower than mainnetPayablePct when an
+  // endpoint's only mainnet option is that legacy id.
+  currentSdkPayablePct: number | null;
+  // Which Algorand mainnet id form(s) the window's 402s used: 'spec', 'legacy', 'both', or null if none.
+  algorandIdForm: AlgorandIdForm | null;
 }
 
 // Don't emit a score we can't stand behind. Tune as your history grows.
@@ -103,6 +109,7 @@ function paymentSignals(obs: Observation[]) {
   const recorded = obs.filter((o) => o.httpStatus === 402 && o.paymentRequiredParsed !== undefined);
   if (recorded.length === 0) return noPaymentSignals();
   const payable = recorded.filter((o) => o.paymentRequiredParsed && payableOnMainnet(o.acceptedNetworks ?? [])).length;
+  const currentSdk = recorded.filter((o) => o.paymentRequiredParsed && payableByCurrentSdk(o.acceptedNetworks ?? [])).length;
   const discoverable = recorded.filter((o) => o.hasBazaarExtension === true).length;
   const networks = new Set<string>();
   for (const o of recorded) for (const n of o.acceptedNetworks ?? []) networks.add(n);
@@ -111,11 +118,20 @@ function paymentSignals(obs: Observation[]) {
     mainnetPayablePct: pct(payable, recorded.length),
     discoverablePct: pct(discoverable, recorded.length),
     acceptedNetworks: [...networks].sort().slice(0, 10),
+    currentSdkPayablePct: pct(currentSdk, recorded.length),
+    algorandIdForm: algorandMainnetIdForm([...networks]),
   };
 }
 
 function noPaymentSignals() {
-  return { paymentRequirementsSamples: 0, mainnetPayablePct: null, discoverablePct: null, acceptedNetworks: null };
+  return {
+    paymentRequirementsSamples: 0,
+    mainnetPayablePct: null,
+    discoverablePct: null,
+    acceptedNetworks: null,
+    currentSdkPayablePct: null,
+    algorandIdForm: null,
+  };
 }
 
 // OpenEAGO SLO view of the same numbers. Pure aliases: no new measurement, null-preserving.

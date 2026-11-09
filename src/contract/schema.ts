@@ -113,6 +113,20 @@ export const reliabilityDetailSchema = {
       maxItems: 10,
       description: 'Payment networks the 402s named in the window, exactly as sent (CAIP-2 or x402 v1 names).',
     },
+    currentSdkPayablePct: percent(
+      'Of the 402s that recorded their requirements, the share payable on a known mainnet in a form the ' +
+        'current x402 SDK accepts. Since @x402/core and @x402/avm 2.29.0 the SDK refuses the legacy ' +
+        'full-genesis-hash Algorand id, so an endpoint whose only mainnet option is that id scores lower ' +
+        'here than in mainnetPayablePct. Informational: not part of the score.',
+    ),
+    algorandIdForm: {
+      type: ['string', 'null'],
+      enum: ['spec', 'legacy', 'both', null],
+      description:
+        'Which Algorand mainnet id form(s) the window\'s 402s used: "spec" (CAIP-2, first 32 characters of ' +
+        'the genesis hash; required by the x402 SDK since 2.29), "legacy" (full genesis hash; accepted by ' +
+        'older clients), "both", or null when Algorand mainnet is not offered.',
+    },
   },
 } as const;
 

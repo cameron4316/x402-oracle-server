@@ -59,21 +59,44 @@ const CLASS: Record<string, NetworkClass> = {
   'hedera:testnet': 'testnet',
 };
 
+// Base64 of a 32-byte genesis hash: the reference of Algorand's legacy full-hash network id.
+const ALGORAND_FULL_HASH = /^[A-Za-z0-9+/]{43}=$/;
+
 /** One canonical id per network: v1 names become CAIP-2, Algorand's legacy full hash is truncated. */
 export function normalizeNetwork(raw: string): string {
   const id = raw.trim();
-  const v1 = V1_NAMES[id.toLowerCase()];
-  if (v1) return v1;
+  const lower = id.toLowerCase();
+  if (Object.hasOwn(V1_NAMES, lower)) return V1_NAMES[lower];
   const colon = id.indexOf(':');
   if (colon <= 0) return id;
   const namespace = id.slice(0, colon).toLowerCase();
   const reference = id.slice(colon + 1);
-  if (namespace === 'algorand') return `algorand:${reference.slice(0, 32)}`;
+  // Only a real full genesis hash is truncated. Any other long reference stays as sent, and so stays
+  // "unknown": a string that merely STARTS with a known id must not count as that network.
+  if (namespace === 'algorand' && ALGORAND_FULL_HASH.test(reference)) return `algorand:${reference.slice(0, 32)}`;
   return `${namespace}:${reference}`;
 }
 
 export function classifyNetwork(raw: string): NetworkClass {
-  return CLASS[normalizeNetwork(raw)] ?? 'unknown';
+  const id = normalizeNetwork(raw);
+  return Object.hasOwn(CLASS, id) ? CLASS[id] : 'unknown';
+}
+
+// A monitored endpoint chooses the text of `accepts[].network`, and a Hosannaith result is read by
+// AI agents (MCP tool output, API responses). To keep an endpoint from passing free text through us
+// to an agent, a network string is relayed in a result ONLY when it is shaped like a network id:
+//   - CAIP-2 grammar: namespace [-a-z0-9]{3,8}, ":", reference [-_a-zA-Z0-9]{1,32}
+//   - Algorand's legacy form: "algorand:" + a base64 full genesis hash (44 characters)
+//   - an x402 v1 network name from the table above
+// No spaces and at most 53 characters, so it cannot carry instructions to a reader.
+// Observations keep the string as sent; this only decides what a result repeats.
+const CAIP2_ID = /^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/;
+
+/** Whether a network string from a 402 is a well-formed network id that a result may repeat. */
+export function isRelayableNetworkId(raw: string): boolean {
+  if (CAIP2_ID.test(raw)) return true;
+  if (raw.startsWith('algorand:') && ALGORAND_FULL_HASH.test(raw.slice('algorand:'.length))) return true;
+  return Object.hasOwn(V1_NAMES, raw.toLowerCase());
 }
 
 /** True when at least one of the accepted networks is a known mainnet. */
@@ -84,7 +107,7 @@ export function payableOnMainnet(networks: readonly string[]): boolean {
 /** An Algorand id in the legacy full-genesis-hash form (reference longer than CAIP-2's 32 chars). */
 function isAlgorandLegacyId(raw: string): boolean {
   const id = raw.trim();
-  return id.toLowerCase().startsWith('algorand:') && id.length - 'algorand:'.length > 32;
+  return id.toLowerCase().startsWith('algorand:') && ALGORAND_FULL_HASH.test(id.slice('algorand:'.length));
 }
 
 /**

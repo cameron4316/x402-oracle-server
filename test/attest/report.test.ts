@@ -86,3 +86,30 @@ test('every committed public report is signed by a published, non-revoked key', 
     assert.equal(v.ok, true, `${f}: ${JSON.stringify(v)}`);
   }
 });
+
+test('report cards with recorded payment requirements add a payment block and a method note; older cards do not', () => {
+  const withPayment = {
+    ...A,
+    summary: {
+      ...A.summary,
+      paymentRequirementsSamples: 480,
+      mainnetPayablePct: 100,
+      currentSdkPayablePct: 100,
+      algorandIdForm: 'spec' as const,
+      acceptedNetworks: ['algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k'],
+    },
+  };
+  const r = buildReport(META, [withPayment, B]) as any;
+  assert.deepEqual(r.endpoints[0].payment, {
+    samples: 480,
+    acceptedNetworks: ['algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k'],
+    algorandIdForm: 'spec',
+    mainnetPayablePct: 100,
+    currentSdkPayablePct: 100,
+  });
+  assert.equal(r.endpoints[1].payment, undefined, 'a card without recorded payment data gets no payment block');
+  assert.match(r.method, /Payment figures .* cover only the 402 responses recorded since 2026-11-09T18:44:00Z/);
+  assert.match(r.method, /not part of the score/);
+  const old = buildReport(META, [A, B]) as any;
+  assert.doesNotMatch(old.method, /Payment figures/, 'reports from older cards are unchanged');
+});

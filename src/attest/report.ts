@@ -8,6 +8,9 @@ export const REPORT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const METHOD_URL = 'https://github.com/cameron4316/x402-oracle-server#reading-the-result';
 const KEYS_URL = 'https://api.hosannaith.com/.well-known/hosannaith-keys.json';
 const VERIFY_URL = 'https://github.com/cameron4316/x402-oracle-server/blob/main/docs/attestation.md#verifying';
+// The monitor began recording what each 402 asks for (networks, version) at this time; payment figures
+// in a report only cover 402 probes from then on.
+export const PAYMENT_RECORDING_SINCE = '2026-11-09T18:44:00Z';
 
 // The subset of a report card (src/report.ts JSON) a public report uses.
 export interface ReportCard {
@@ -24,6 +27,12 @@ export interface ReportCard {
     p99LatencyMs?: number | null;
     firstObservedAt: string | null;
     lastObservedAt: string | null;
+    // Payment signals (present on report cards generated since they were added; see score.ts).
+    paymentRequirementsSamples?: number;
+    mainnetPayablePct?: number | null;
+    currentSdkPayablePct?: number | null;
+    algorandIdForm?: 'spec' | 'legacy' | 'both' | null;
+    acceptedNetworks?: string[] | null;
   };
   sustained: Array<{ kind: 'down' | 'ungated'; start: string; end: string; durationMin: number; probes: number }>;
   transientDown: number;
@@ -65,7 +74,12 @@ export function buildReport(meta: ReportMeta, cards: ReportCard[]) {
       `(mean interval ${meanIntervalSeconds} s). Uptime = probes where the endpoint was reachable and not a 5xx. ` +
       'Correct-402 = of the probes where the endpoint made a payment decision (402, or an unpaid 2xx), the share ' +
       'that correctly answered 402. Score = 0.6 x uptime + 0.4 x correct-402 - a latency penalty (up to 20). ' +
-      `A sustained outage is 2+ consecutive failed probes. Full definitions: ${METHOD_URL}`,
+      `A sustained outage is 2+ consecutive failed probes. Full definitions: ${METHOD_URL}` +
+      (cards.some(hasPayment)
+        ? ` Payment figures (networks accepted, Algorand network id form, payability on mainnet and by the current ` +
+          `x402 SDK) cover only the 402 responses recorded since ${PAYMENT_RECORDING_SINCE}, when the monitor ` +
+          'began recording them; they are informational and not part of the score.'
+        : ''),
     disclaimer:
       'An observational measurement of past behaviour over the stated window. It is not a guarantee of future ' +
       'availability or performance, and not an audit, certification or endorsement.',
@@ -84,8 +98,23 @@ export function buildReport(meta: ReportMeta, cards: ReportCard[]) {
       sustainedOutages: c.sustained,
       transientErrors: c.transientDown + c.transientUngated,
       latencySpikes: c.spikes,
+      ...(hasPayment(c)
+        ? {
+            payment: {
+              samples: c.summary.paymentRequirementsSamples,
+              acceptedNetworks: c.summary.acceptedNetworks ?? [],
+              algorandIdForm: c.summary.algorandIdForm ?? null,
+              mainnetPayablePct: c.summary.mainnetPayablePct ?? null,
+              currentSdkPayablePct: c.summary.currentSdkPayablePct ?? null,
+            },
+          }
+        : {}),
     })),
     publisher: 'Hosannaith (https://hosannaith.com)',
     verification: { keys: KEYS_URL, instructions: VERIFY_URL },
   };
+}
+
+function hasPayment(c: ReportCard): boolean {
+  return (c.summary.paymentRequirementsSamples ?? 0) > 0;
 }

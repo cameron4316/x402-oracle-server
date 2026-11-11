@@ -186,5 +186,20 @@ await check('POST /reliability/batch with a private target -> 400 Problem Detail
   expect(/127\.0\.0\.1/.test((await res.json()).detail ?? ''), 'detail does not name the refused target');
 });
 
+await check('windowHours: 168 still gets the 402; 48 gets a 400 before payment', async () => {
+  const ok = await get('/reliability?target=' + encodeURIComponent('https://x402.goplausible.xyz/examples/weather') + '&windowHours=168');
+  expect(ok.status === 402, `windowHours=168 status ${ok.status}`);
+  const bad = await get('/reliability?target=' + encodeURIComponent('https://x402.goplausible.xyz/examples/weather') + '&windowHours=48');
+  expect(bad.status === 400, `windowHours=48 status ${bad.status}`);
+  expect(!bad.headers.get('payment-required'), 'a refused window must not get a payment requirement');
+  expect(/one of 24, 168, 720/.test((await bad.json()).detail ?? ''), 'detail does not list the allowed windows');
+  const badBatch = await get('/reliability/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ targets: ['https://example.com/x402'], windowHours: 48 }),
+  });
+  expect(badBatch.status === 400, `batch windowHours=48 status ${badBatch.status}`);
+});
+
 console.log(failures ? `\n${failures} check(s) failed` : '\nall checks passed');
 process.exit(failures ? 1 : 0);

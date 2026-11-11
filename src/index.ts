@@ -12,6 +12,7 @@ import { routes } from './routes.config.js';
 import { getCheck } from './checks/registry.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
 import { checkTarget } from './checks/reliability/target-url.js';
+import { parseWindowHours, WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { PUBLISHED_SCHEMAS } from './contract/schema.js';
 import { buildOpenApi, type PaidRouteLike } from './contract/openapi.js';
 import { PROBLEM_CONTENT_TYPE, problem } from './contract/problem.js';
@@ -64,6 +65,8 @@ app.get('/reliability', async (c, next) => {
     const checked = checkTarget(target);
     if (!checked.ok) return problemResponse(c, 400, `Target not accepted: ${checked.reason}.`);
   }
+  const window = parseWindowHours(c.req.query('windowHours'));
+  if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
   await next();
 });
 // Same for a batch, from a clone of the body (the handler still reads the original). Only bodies
@@ -75,11 +78,16 @@ app.post('/reliability/batch', async (c, next) => {
   const length = Number(c.req.header('content-length') ?? NaN);
   if (Number.isFinite(length) && length > 0 && length <= PRECHECK_MAX_BYTES) {
     let targets: unknown;
+    let windowHours: unknown;
     try {
-      targets = ((await c.req.raw.clone().json()) as { targets?: unknown } | null)?.targets;
+      const parsed = (await c.req.raw.clone().json()) as { targets?: unknown; windowHours?: unknown } | null;
+      targets = parsed?.targets;
+      windowHours = parsed?.windowHours;
     } catch {
       targets = undefined; // malformed: left to the handler, as before
     }
+    const window = parseWindowHours(windowHours);
+    if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
     if (Array.isArray(targets)) {
       const rejected = targets.map(checkTarget).filter((r) => !r.ok);
       if (rejected.length > 0) {
@@ -103,7 +111,9 @@ app.get('/reliability', async (c) => {
   }
   const check = getCheck('reliability');
   if (!check) return problemResponse(c, 500, 'reliability check not registered');
-  const result = await check.run(target);
+  const window = parseWindowHours(c.req.query('windowHours'));
+  if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
+  const result = await check.run(target, { windowHours: window.hours });
   // Signed after payment and after the check: the payment middleware is not involved.
   return c.json(signer ? attest(signer, result) : result);
 });
@@ -122,7 +132,9 @@ app.post('/reliability/batch', async (c) => {
   if (!Array.isArray(targets)) {
     return problemResponse(c, 400, 'Body must be { "targets": ["<endpoint-url>", ...] }');
   }
-  const result = await reliabilityBatch(targets);
+  const window = parseWindowHours((body as { windowHours?: unknown } | null)?.windowHours);
+  if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
+  const result = await reliabilityBatch(targets, window.hours);
   return c.json(signer ? attestBatch(signer, result) : result);
 });
 
@@ -249,6 +261,10 @@ Request
 - target (query, required): full http(s) URL of the x402 endpoint to score (max 2048 characters).
   Refused with a 400 BEFORE payment: private, loopback, link-local and reserved addresses, internal
   host names (localhost, *.local, *.internal, ...), URLs with credentials, and non-http(s) URLs.
+- windowHours (query, optional): history window, one of ${WINDOW_HOURS_ALLOWED.join(' | ')} hours.
+  24 = last day (default); 168 = rolling 7 days and 720 = rolling 30 days, the windows FINOS OpenEAGO
+  Appendix D uses for reliability_score / error_rate / latency_p99_ms and availability_pct.
+  The batch route takes the same value as "windowHours" in its JSON body. Other values: 400, before payment.
 
 Response (application/json)
 {

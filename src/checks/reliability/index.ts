@@ -1,11 +1,12 @@
 import { dirname, join } from 'node:path';
-import type { Check, CheckResult } from '../types.js';
+import type { Check, CheckResult, CheckRunOptions } from '../types.js';
 import { JsonlObservationStore } from './store.js';
 import { summarize, statusFromScore } from './score.js';
 import { probe } from './monitor.js';
 import { TargetRegistry } from './targets.js';
 import { CONFIG } from '../../config.js';
 import { assertTarget } from './target-url.js';
+import { parseWindowHours } from './window.js';
 
 // Single shared store instance — the monitor writes to it, the paid check reads from it.
 const store = new JsonlObservationStore(CONFIG.observationLog);
@@ -15,7 +16,6 @@ const targetRegistry = new TargetRegistry(
   join(dirname(CONFIG.observationLog), 'targets.json'),
   CONFIG.monitorTargets,
 );
-const DEFAULT_WINDOW_HOURS = 24;
 
 export const reliabilityCheck: Check = {
   id: 'reliability',
@@ -27,11 +27,14 @@ export const reliabilityCheck: Check = {
       "detail.confidence field — 'history' vs 'one-shot') and is enrolled for ongoing monitoring."
     );
   },
-  async run(rawTarget: string): Promise<CheckResult> {
-    // Callers (HTTP API, remote MCP) reject a disallowed target before payment; this is the backstop
-    // that keeps one from ever being probed or enrolled.
+  async run(rawTarget: string, options?: CheckRunOptions): Promise<CheckResult> {
+    // Callers (HTTP API, remote MCP) reject a disallowed target or window before payment; these are
+    // the backstops that keep one from ever being probed, enrolled or scored.
     const target = assertTarget(rawTarget);
-    const windowMs = DEFAULT_WINDOW_HOURS * 3600 * 1000;
+    const window = parseWindowHours(options?.windowHours);
+    if (!window.ok) throw new Error(window.reason);
+    const windowHours = window.hours;
+    const windowMs = windowHours * 3600 * 1000;
     let obs = await store.readForTarget(target, windowMs);
     let confidence: 'history' | 'one-shot' = 'history';
 
@@ -47,7 +50,7 @@ export const reliabilityCheck: Check = {
       obs = [liveObs];
     }
 
-    const summary = summarize(obs, DEFAULT_WINDOW_HOURS);
+    const summary = summarize(obs, windowHours);
     const status = statusFromScore(summary.score);
     return {
       target,

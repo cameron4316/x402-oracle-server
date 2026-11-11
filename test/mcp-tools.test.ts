@@ -75,3 +75,23 @@ test('an allowed target reaches the tool callback', async () => {
   assert.notEqual(b.isError, true);
   assert.equal(calls.length, 2);
 });
+
+test('windowHours: 24, 168 and 720 reach the tool; other values never do', async () => {
+  const { windowHoursArg } = await import('../src/mcp-tools.js');
+  const server = new McpServer({ name: 'test', version: '0.0.0' });
+  const seen: unknown[] = [];
+  server.registerTool('w', { description: 'w', inputSchema: { target: targetUrl, windowHours: windowHoursArg } }, async (args) => {
+    seen.push(args.windowHours);
+    return { content: [{ type: 'text', text: 'ok' }] };
+  });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'c', version: '0.0.0' });
+  await Promise.all([server.connect(a), client.connect(b)]);
+  const t = 'https://x402.goplausible.xyz/examples/weather';
+  for (const w of [undefined, 24, 168, 720]) {
+    const r = await client.callTool({ name: 'w', arguments: w === undefined ? { target: t } : { target: t, windowHours: w } });
+    assert.notEqual(r.isError, true);
+  }
+  for (const w of [48, 0, '168']) assert.ok(await refused(client, 'w', { target: t, windowHours: w }), `${w} should be refused`);
+  assert.deepEqual(seen, [undefined, 24, 168, 720]);
+});

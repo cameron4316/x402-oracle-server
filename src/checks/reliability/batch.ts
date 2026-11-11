@@ -2,8 +2,8 @@ import type { CheckResult } from '../types.js';
 import { summarize, statusFromScore } from './score.js';
 import { reliabilityStore, reliabilityTargetRegistry } from './index.js';
 import { checkTarget } from './target-url.js';
+import { DEFAULT_WINDOW_HOURS, parseWindowHours } from './window.js';
 
-const DEFAULT_WINDOW_HOURS = 24;
 
 // Max targets scored per paid batch call. History-only reads are cheap, so this is a
 // value/abuse bound, not a performance one — one $7 call shouldn't score thousands.
@@ -21,8 +21,10 @@ export interface BatchResult {
 // full score; a target with no history yet is returned `unknown` and ENROLLED for monitoring (no
 // inline live probe — a 50-target batch must not fan out into 50 slow probes). The single
 // GET /reliability keeps its probe-a-new-target behaviour for one-offs.
-export async function reliabilityBatch(rawTargets: unknown[]): Promise<BatchResult> {
-  const windowMs = DEFAULT_WINDOW_HOURS * 3600 * 1000;
+export async function reliabilityBatch(rawTargets: unknown[], windowHours: number = DEFAULT_WINDOW_HOURS): Promise<BatchResult> {
+  const window = parseWindowHours(windowHours);
+  if (!window.ok) throw new Error(window.reason);
+  const windowMs = window.hours * 3600 * 1000;
   const requested = rawTargets.length;
 
   // Clean: keep allowed URLs (see target-url.ts; callers reject the rest before payment), trim,
@@ -50,12 +52,12 @@ export async function reliabilityBatch(rawTargets: unknown[]): Promise<BatchResu
         checkId: 'reliability',
         status: 'unknown',
         score: null,
-        detail: { observations: 0, windowHours: DEFAULT_WINDOW_HOURS, confidence: 'pending' },
+        detail: { observations: 0, windowHours: window.hours, confidence: 'pending' },
         observedAt: new Date().toISOString(),
       });
       continue;
     }
-    const summary = summarize(obs, DEFAULT_WINDOW_HOURS);
+    const summary = summarize(obs, window.hours);
     results.push({
       target,
       checkId: 'reliability',

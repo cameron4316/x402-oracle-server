@@ -169,3 +169,36 @@ test('a batch skips disallowed targets and enrolls only the allowed ones', async
   assert.ok(enrolled.includes('https://batch.example/allowed'));
   assert.ok(!enrolled.includes('10.0.0.1') && !enrolled.includes('::1'));
 });
+
+test('windowHours: 168 and 720 read older history that the default 24 h window leaves out', async () => {
+  const target = 'https://history.example/windows';
+  const day = 24 * 3600 * 1000;
+  seedHistory(target, 6, { at: new Date(Date.now() - 3 * day).toISOString() }); // 3 days ago
+  seedHistory(target, 6, { at: new Date(Date.now() - 20 * day).toISOString(), reachable: false, httpStatus: null, demandedPayment: false, latencyMs: null }); // 20 days ago, down
+  seedHistory(target, 6); // the last few minutes
+
+  const fetchMock = mockFetch(402);
+  const d1 = await reliabilityCheck.run(target);
+  const d7 = await reliabilityCheck.run(target, { windowHours: 168 });
+  const d30 = await reliabilityCheck.run(target, { windowHours: 720 });
+  fetchMock.restore();
+
+  assert.equal(fetchMock.callCount(), 0, 'all three windows have history: no live probe');
+  assert.equal(d1.detail.windowHours, 24);
+  assert.equal(d1.detail.observations, 6);
+  assert.equal(d7.detail.windowHours, 168);
+  assert.equal(d7.detail.observations, 12);
+  assert.equal(d7.detail.uptimePct, 100);
+  assert.equal(d30.detail.windowHours, 720);
+  assert.equal(d30.detail.observations, 18);
+  assert.ok((d30.detail.uptimePct as number) < 100, 'the 30-day window includes the outage 20 days ago');
+});
+
+test('windowHours: any other value is refused', async () => {
+  await assert.rejects(() => reliabilityCheck.run('https://history.example/windows', { windowHours: 48 }), /windowHours must be one of 24, 168, 720/);
+  const { reliabilityBatch } = await import('../../src/checks/reliability/batch.js');
+  await assert.rejects(() => reliabilityBatch(['https://history.example/windows'], 1), /windowHours must be one of/);
+  const batch = await reliabilityBatch(['https://history.example/windows'], 168);
+  assert.equal(batch.results[0].detail.windowHours, 168);
+  assert.equal(batch.results[0].detail.observations, 12);
+});

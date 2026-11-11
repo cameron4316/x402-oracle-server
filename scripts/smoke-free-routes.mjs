@@ -104,6 +104,16 @@ async function expectProblem(res, status) {
   expect(p.type === 'about:blank' && p.status === status && typeof p.title === 'string', JSON.stringify(p));
 }
 
+await check('GET /.well-known/security.txt -> text/plain with Contact and a future Expires', async () => {
+  const res = await get('/.well-known/security.txt');
+  expect(res.status === 200, `status ${res.status}`);
+  expect(ctype(res) === 'text/plain', `content-type ${ctype(res)}`);
+  const text = await res.text();
+  expect(/^Contact: mailto:security@hosannaith\.com$/m.test(text), 'no Contact line');
+  const expires = /^Expires: (.+)$/m.exec(text)?.[1];
+  expect(expires && Date.parse(expires) > Date.now(), `Expires ${expires}`);
+});
+
 await check('GET /schema/constructor.json -> 404 Problem Details (no prototype lookup)', async () => {
   await expectProblem(await get('/schema/constructor.json'), 404);
 });

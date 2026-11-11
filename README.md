@@ -263,6 +263,12 @@ Challenge.
 [FINOS CALM](https://calm.finos.org) (nodes, relationships and the paid-check, monitoring and
 verification flows), validated in CI with the official CALM CLI. See [`calm/README.md`](calm/README.md).
 
+## Security
+
+To report a vulnerability, email security@hosannaith.com or use GitHub's private vulnerability
+reporting. Please don't open a public issue. Scope and what to expect: [SECURITY.md](SECURITY.md).
+Machine-readable: [`/.well-known/security.txt`](https://api.hosannaith.com/.well-known/security.txt).
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).

@@ -181,6 +181,7 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
       '/health': freeJson('Liveness check'),
       '/.well-known/x402': freeJson('x402 discovery document'),
       '/.well-known/hosannaith-keys.json': freeJson('Public keys for verifying signed results (JWKS + revoked_keys)'),
+      '/.well-known/security.txt': freeText('Where to report a security issue (RFC 9116)'),
       '/reports/{id}.json': {
         get: {
           summary: 'Signed, dated public reliability report',

@@ -19,6 +19,7 @@ import { PROBLEM_CONTENT_TYPE, problem } from './contract/problem.js';
 import { loadKeyHistory, loadSigner, publishedKeySet } from './attest/keyset.js';
 import { attest, attestBatch } from './attest/sign.js';
 import { REPORT_ID_PATTERN } from './attest/report.js';
+import { securityTxt } from './security-txt.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -178,6 +179,11 @@ app.get('/.well-known/x402', (c) => c.json(wellKnownX402()));
 // Public keys for verifying signed results: a JWKS (keys[]) plus revoked_keys[]. Free.
 const publishedKeys = publishedKeySet(keyHistory);
 app.get('/.well-known/hosannaith-keys.json', (c) => c.json(publishedKeys));
+
+// Where to report a vulnerability (RFC 9116). Free; plain text as the RFC requires.
+app.get('/.well-known/security.txt', (c) =>
+  c.body(securityTxt(), 200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }),
+);
 
 // Signed public reports (free): dated, citable snapshots committed to public-reports/ in the repo.
 // Read on each request, so publishing a new report needs no restart. The id pattern rules out paths.
@@ -342,6 +348,7 @@ GET /health                     - liveness check: {"ok":true,...}
 GET /                           - service info (send Accept: application/json for JSON)
 GET /.well-known/x402           - machine-readable discovery document
 GET /.well-known/hosannaith-keys.json - public keys for verifying signed results
+GET /.well-known/security.txt   - where to report a security issue (RFC 9116)
 GET /reports/<id>.json          - signed, dated public reliability reports (free)
 GET /openapi.json               - OpenAPI 3.1 description (paid terms in each operation's x-x402)
 GET /schema/check-result.json   - JSON Schema of a reliability result

@@ -112,13 +112,22 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
                 'addresses, internal host names and URLs with credentials are refused (400, before payment).',
               schema: { type: 'string', format: 'uri', maxLength: 2048 },
             },
+            {
+              name: 'windowHours',
+              in: 'query',
+              required: false,
+              description:
+                'History window in hours: 24 (default), 168 (rolling 7 days) or 720 (rolling 30 days), ' +
+                'the windows FINOS OpenEAGO Appendix D uses. Any other value is refused (400, before payment).',
+              schema: { type: 'integer', enum: [24, 168, 720], default: 24 },
+            },
           ],
           responses: {
             '200': {
               description: 'Reliability result.',
               content: { 'application/json': { schema: { $ref: '#/components/schemas/CheckResult' } } },
             },
-            '400': problemResponse('Target not accepted (see the target parameter). Returned before payment.'),
+            '400': problemResponse('Target or windowHours not accepted (see the parameters). Returned before payment.'),
             '402': paymentRequiredResponse,
             '500': problemResponse('Internal error.'),
           },
@@ -146,6 +155,12 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
                       description:
                         `Endpoint URLs. Duplicates are removed; at most ${opts.maxBatchTargets} are scored. ` +
                         'The same targets are refused as for GET /reliability (400, before payment).',
+                    },
+                    windowHours: {
+                      type: 'integer',
+                      enum: [24, 168, 720],
+                      default: 24,
+                      description: 'History window in hours, as for GET /reliability.',
                     },
                   },
                 },

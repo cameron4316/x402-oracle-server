@@ -20,7 +20,8 @@ import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.
 import { loadSigner } from './attest/keyset.js';
 import { attest, attestBatch } from './attest/sign.js';
 import { MAX_TARGET_LENGTH } from './checks/reliability/target-url.js';
-import { INFO_TOOL_ANNOTATIONS, PAID_TOOL_ANNOTATIONS, targetUrl } from './mcp-tools.js';
+import { INFO_TOOL_ANNOTATIONS, PAID_TOOL_ANNOTATIONS, targetUrl, windowHoursArg } from './mcp-tools.js';
+import { WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { AuditLog, PAYMENT_META_KEY, PAYMENT_RESPONSE_META_KEY, withAudit } from './mcp-audit.js';
 
 // Same signing key and rules as the HTTP API (docs/attestation.md).
@@ -133,7 +134,10 @@ const SINGLE: PaidTool = {
     'one live unpaid probe and is enrolled for ongoing monitoring. Only public http(s) URLs are accepted.',
   inputSchema: {
     type: 'object',
-    properties: { target: { type: 'string', format: 'uri', maxLength: MAX_TARGET_LENGTH } },
+    properties: {
+      target: { type: 'string', format: 'uri', maxLength: MAX_TARGET_LENGTH },
+      windowHours: { type: 'integer', enum: [...WINDOW_HOURS_ALLOWED] },
+    },
     required: ['target'],
   },
   exampleInput: { target: 'https://x402.goplausible.xyz/examples/weather' },
@@ -158,6 +162,7 @@ const BATCH: PaidTool = {
         minItems: 1,
         maxItems: MAX_BATCH_TARGETS,
       },
+      windowHours: { type: 'integer', enum: [...WINDOW_HOURS_ALLOWED] },
     },
     required: ['targets'],
   },
@@ -192,7 +197,8 @@ const INFO_TEXT = [
   '  score:     0–100, or null when there is not enough data to stand behind a score',
   '  detail: {',
   '    confidence:  "history" (scored from accrued observations) | "one-shot" (only one live probe — treat cautiously)',
-  '    observations, windowHours: how many samples over what period the score covers',
+  '    observations, windowHours: how many samples over what period the score covers (pass',
+  '      windowHours 168 or 720 for a rolling 7- or 30-day score; 24 is the default)',
   '    uptimePct, correct402Pct, p50LatencyMs, p95LatencyMs, p99LatencyMs: the underlying signals',
   '      (p99LatencyMs is null below 20 latency samples)',
   '    availability_pct, error_rate_pct, protocol_conformance_pct, score_normalized: the same',
@@ -236,12 +242,12 @@ async function buildPaidTools() {
     singleCfg,
     batchCfg,
     // Results are signed inside the paid handler, after payment; the payment wrapper is unchanged.
-    single: createPaymentWrapper(resourceServer, singleCfg)<{ target: string }>(async ({ target }) => {
-      const result = await reliabilityCheck.run(target);
+    single: createPaymentWrapper(resourceServer, singleCfg)<{ target: string; windowHours?: number }>(async ({ target, windowHours }) => {
+      const result = await reliabilityCheck.run(target, { windowHours });
       return json(signer ? attest(signer, result) : result);
     }),
-    batch: createPaymentWrapper(resourceServer, batchCfg)<{ targets: string[] }>(async ({ targets }) => {
-      const result = await reliabilityBatch(targets);
+    batch: createPaymentWrapper(resourceServer, batchCfg)<{ targets: string[]; windowHours?: number }>(async ({ targets, windowHours }) => {
+      const result = await reliabilityBatch(targets, windowHours);
       return json(signer ? attestBatch(signer, result) : result);
     }),
   };
@@ -274,6 +280,7 @@ function buildMcpServer(paid: PaidTools): McpServer {
       description: SINGLE.description,
       inputSchema: {
         target: targetUrl.describe('The full https URL of the x402 endpoint to evaluate, e.g. https://api.example.com/resource'),
+        windowHours: windowHoursArg,
       },
       annotations: PAID_TOOL_ANNOTATIONS,
       _meta: priceMeta(SINGLE, paid.singleCfg.accepts),
@@ -292,6 +299,7 @@ function buildMcpServer(paid: PaidTools): McpServer {
           .min(1)
           .max(MAX_BATCH_TARGETS)
           .describe(`Up to ${MAX_BATCH_TARGETS} x402 endpoint URLs to score in one paid call.`),
+        windowHours: windowHoursArg,
       },
       annotations: PAID_TOOL_ANNOTATIONS,
       _meta: priceMeta(BATCH, paid.batchCfg.accepts),

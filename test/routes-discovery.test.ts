@@ -71,3 +71,13 @@ test('every paid route offers both Algorand network ids, spec form first, otherw
     assert.equal(first.extra.tag, 'x402-global-challenge');
   }
 });
+
+test('both routes declare the optional windowHours for discovery', () => {
+  const declared = (key: keyof typeof routes) => JSON.stringify(routes[key].extensions);
+  for (const key of Object.keys(routes) as Array<keyof typeof routes>) {
+    const ext = declared(key);
+    assert.match(ext, /"windowHours"/, `${key} declares windowHours`);
+    assert.match(ext, /168/);
+    assert.match(ext, /720/);
+  }
+});

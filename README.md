@@ -20,8 +20,13 @@ confidence (`"history"` for a stood-behind score, `"one-shot"` for a target quer
 time). It's x402 monitoring x402.
 
 ```
-GET https://api.hosannaith.com/reliability?target=<x402-endpoint-url>
+GET https://api.hosannaith.com/reliability?target=<x402-endpoint-url>[&windowHours=24|168|720]
 ```
+
+`windowHours` picks the history window: 24 hours (default), 168 (rolling 7 days) or 720 (rolling
+30 days). The 7- and 30-day windows are the ones FINOS OpenEAGO Appendix D specifies for
+`reliability_score`, `error_rate`, `latency_p99_ms` (7 days) and `availability_pct` (30 days). The
+batch route takes the same value as `"windowHours"` in its JSON body.
 
 Unpaid requests get `402 Payment Required` with payment instructions; paid requests settle in
 USDC on Algorand via the GoPlausible facilitator and return JSON like:
@@ -225,24 +230,21 @@ data/
   observations.jsonl    Append-only history (git-ignored; compounding)
 ```
 
-## Mainnet is live — the CAIP-2 override, explained accurately
+## Algorand network ids: both forms, during the transition
 
-`src/config.ts`'s `FACILITATOR_TESTNET_CAIP2` and `MAINNET_CAIP2` are **hardcoded, not imported
-from `@x402/avm`** — and that's deliberate, not an oversight. Here's the real story:
+Algorand has two CAIP-2 ids in use for each network. The spec form (`algorand:` plus the first 32
+characters of the genesis hash) is what `@x402/avm` exports as `ALGORAND_MAINNET_CAIP2` /
+`ALGORAND_TESTNET_CAIP2`, and since `@x402/core` / `@x402/avm` 2.29.0 (`x402-foundation/x402` #3894)
+it is the only form the x402 SDK accepts. The legacy full-genesis-hash form is what the GoPlausible
+facilitator originally required (reported in `x402-foundation/x402` #3528). The facilitator now lists
+the spec form first and still accepts the legacy form until it is switched off with notice.
 
-`@x402/avm`'s `ALGORAND_TESTNET_CAIP2` / `ALGORAND_MAINNET_CAIP2` exports are the **spec-correct**,
-truncated CAIP-2 form (per the Algorand CAIP-2 namespace profile; fixed upstream in
-`x402-foundation/x402` issue #2904 / PR #2931). The package is not the problem. The live
-GoPlausible facilitator (`facilitator.goplausible.xyz`) runs `GoPlausible/x402-avm`, a fork
-hundreds of commits behind upstream that predates that fix — so its `/supported` endpoint still
-advertises the legacy, non-compliant full-genesis-hash form, on both testnet and mainnet. This
-server hardcodes the values the facilitator **actually expects**, verified live via
-`curl https://facilitator.goplausible.xyz/supported`, not guessed and not the package constant.
-
-**If GoPlausible syncs their fork** to the upstream fix, both constants must be reverted back to
-importing from `@x402/avm` — see the comments at each constant in `src/config.ts` for the full
-reasoning. A tracking report was filed upstream against `x402-foundation/x402` (GoPlausible's own
-fork has issue creation restricted, so that wasn't an option).
+So every 402 from this server offers **both**, spec form first, otherwise identical (same price,
+payTo, asset and tag): clients on current SDKs pay the spec form, and older installs of our own
+clients keep paying the legacy form. `src/config.ts` imports the spec form from `@x402/avm` and checks
+at startup that it is exactly the legacy form truncated to 32 characters. The legacy option will be
+dropped, and this server's `@x402` packages upgraded to 2.29+, in step with the facilitator's
+switch-off. Paid settlements on both ids are verified on mainnet.
 
 To run this server against mainnet yourself: set `NETWORK=mainnet` and `AVM_ADDRESS` to a
 **fixed** payTo address opted in to mainnet USDC (ASA `31566704`, already set in `src/config.ts`).

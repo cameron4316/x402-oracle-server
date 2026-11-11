@@ -13,8 +13,13 @@ export interface CheckResult {
   observedAt: string; // ISO 8601
 }
 
+/** Optional per-call parameters a check may honour (a check ignores what it does not use). */
+export interface CheckRunOptions {
+  windowHours?: number; // history window, for checks that score accumulated history
+}
+
 export interface Check {
   readonly id: string;
   describe(): string; // human-readable; feeds Bazaar discovery metadata
-  run(target: string): Promise<CheckResult>;
+  run(target: string, options?: CheckRunOptions): Promise<CheckResult>;
 }

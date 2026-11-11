@@ -1,4 +1,5 @@
 import { declareDiscoveryExtension } from '@x402-avm/extensions';
+import { WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { CONFIG } from './config.js';
 
 // Max targets per batch call. Duplicated from checks/reliability/batch.ts (MAX_BATCH_TARGETS) on
@@ -58,6 +59,11 @@ export const routes = {
       schema: {
         properties: {
           target: { type: 'string', format: 'uri', maxLength: 2048, description: 'Full http(s) URL of the x402 endpoint to score.' },
+          windowHours: {
+            type: 'string',
+            enum: WINDOW_HOURS_ALLOWED.map(String),
+            description: 'Optional history window in hours: 24 (default), 168 (rolling 7 days) or 720 (rolling 30 days).',
+          },
         },
         required: ['target'],
         additionalProperties: false,
@@ -106,6 +112,11 @@ export const routes = {
             minItems: 1,
             maxItems: BATCH_TARGET_LIMIT,
             description: `Endpoint URLs to score. Duplicates are removed; at most ${BATCH_TARGET_LIMIT} are scored.`,
+          },
+          windowHours: {
+            type: 'integer',
+            enum: [...WINDOW_HOURS_ALLOWED],
+            description: 'Optional history window in hours: 24 (default), 168 (rolling 7 days) or 720 (rolling 30 days).',
           },
         },
         required: ['targets'],

@@ -155,3 +155,16 @@ jobs:
             if (files.some((f) => f.startsWith("test/") || f.endsWith(".test.ts"))) throw new Error("tests would be published");
             if (JSON.stringify(files) !== JSON.stringify(again)) throw new Error("the extracted tarball repacks differently");
           ' "$RUNNER_TEMP/pack.json" "$RUNNER_TEMP/repack.json"
+
+  # Validates the CALM (FINOS Architecture-as-Code) model of Hosannaith with the official CLI, so the
+  # architecture document cannot drift out of the schema. See calm/README.md.
+  calm:
+    name: CALM architecture (validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: calm validate
+        run: npx --yes @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pretty

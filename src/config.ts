@@ -1,5 +1,6 @@
 import { config as loadEnv } from 'dotenv';
 import { ALGORAND_MAINNET_CAIP2, ALGORAND_TESTNET_CAIP2, USDC_TESTNET_ASA_ID } from '@x402/avm';
+import { trimTrailingSlashes } from './trim.js';
 
 loadEnv();
 
@@ -72,7 +73,7 @@ export const CONFIG = {
   port: Number(process.env.PORT ?? 4021),
   // Public HTTPS origin of the API. Used as each paid route's x402 `resource.url`: TLS terminates at
   // nginx, so the URL the app sees on a request is http://, which is not what clients reach.
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL ?? 'https://api.hosannaith.com').replace(/\/+$/, ''),
+  publicBaseUrl: trimTrailingSlashes(process.env.PUBLIC_BASE_URL ?? 'https://api.hosannaith.com'),
   // Remote x402-gated MCP server (src/mcp-remote.ts) — its own process/port, isolated from the API.
   mcpRemotePort: Number(process.env.MCP_REMOTE_PORT ?? 4022),
   // Competition tag added to each route's `extra` so activity is attributed to the Challenge.

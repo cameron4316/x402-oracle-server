@@ -26,7 +26,7 @@ It is a logical architecture. Hosting and deployment details are intentionally l
 npx @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pretty
 ```
 
-The command exits non-zero only on errors; warnings are hints. To browse it visually, open the file in
+CI runs it with `--strict`, so warnings fail the build as well as errors. To browse it visually, open the file in
 the CALM VS Code extension or render it with `calm docify`.
 
 ## Next

@@ -167,4 +167,4 @@ jobs:
         with:
           node-version: 22
       - name: calm validate
-        run: npx --yes @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pretty
+        run: npx --yes @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pretty --strict

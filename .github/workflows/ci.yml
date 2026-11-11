@@ -168,3 +168,7 @@ jobs:
           node-version: 22
       - name: calm validate
         run: npx --yes @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pretty --strict
+      # Every FINOS AI Governance Framework id used in docs/aigf-mapping.md and in the CALM controls
+      # must exist in the framework repository at the pinned commit, with that title and status.
+      - name: AIGF ids match the framework source
+        run: node scripts/check-aigf-ids.mjs --fetch

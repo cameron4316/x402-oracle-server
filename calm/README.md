@@ -34,8 +34,33 @@ npx @finos/calm-cli@1.69.0 validate -a calm/hosannaith.architecture.json -f pret
 CI runs it with `--strict`, so warnings fail the build as well as errors. To browse it visually, open the file in
 the CALM VS Code extension or render it with `calm docify`.
 
-## Next
+## Controls: FINOS AI Governance Framework
 
-CALM `controls` for the properties that matter to a relying party (signed results, refusal of private
-targets before payment, the receive-only payTo, the audit log), each linked to the matching risk or
-mitigation in the [FINOS AI Governance Framework](https://github.com/finos/ai-governance-framework).
+Five nodes carry CALM `controls` that link to mitigations in the
+[FINOS AI Governance Framework](https://github.com/finos/ai-governance-framework). The reasoning,
+the evidence and the mitigations that do not apply are in
+[`docs/aigf-mapping.md`](../docs/aigf-mapping.md).
+
+| Control key | Mitigation | Nodes |
+|---|---|---|
+| `mcp-security` | MI-20 MCP Server Security Governance | `remote-mcp`, `mcp-package` |
+| `tool-chain-validation` | MI-19 Tool Chain Validation and Sanitization | `remote-mcp`, `oracle-api` |
+| `credential-protection` | MI-23 Agentic System Credential Protection Framework | `mcp-package`, `client-sdk` |
+| `decision-audit` | MI-21 Agent Decision Audit and Explainability | `oracle-api`, `report-signer`, `client-sdk` |
+| `ai-observability` | MI-04 AI System Observability | `monitor` |
+
+How each control is written:
+
+- The key is the one FINOS CALM tooling uses for that mitigation.
+- The shape follows FINOS's own CALM examples (the FluxNova architectures in
+  `finos/architecture-as-code`): `requirement-url` is CALM's base control-requirement schema, and
+  the CALM CLI validates the `config` against it.
+- `config` has `control-id`, `name` and `description` as that schema requires, then:
+  `reference-url` (the mitigation's source file in the framework repository, at a pinned commit),
+  `aigf-id`, `aigf-commit`, `role` (the provider being vetted, or an input to the firm's own
+  control), an honest `status`, and `mapping` (the matching section of the mapping page).
+
+[`aigf-sources.json`](aigf-sources.json) lists every framework id we use with the file it comes
+from. `node scripts/check-aigf-ids.mjs` fails if an id appears anywhere without an entry there, or if
+a link or control points at a different file. It runs with the tests. With `--fetch` it also checks
+the entries against the framework repository itself, which CI does.

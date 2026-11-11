@@ -52,7 +52,47 @@
           "url": "https://api.hosannaith.com/reports/"
         }
       ],
-      "development-language": "TypeScript"
+      "development-language": "TypeScript",
+      "controls": {
+        "tool-chain-validation": {
+          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated before payment (public http(s) URL, fixed windows, batch size; private and reserved addresses refused), and tool output cannot carry free text from a monitored endpoint.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-tool-chain-validation",
+                "name": "Tool Chain Validation and Sanitization",
+                "description": "Tool inputs are validated before payment (public http(s) URL, fixed windows, batch size; private and reserved addresses refused), and tool output cannot carry free text from a monitored endpoint.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md",
+                "aigf-id": "MI-19",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-19-tool-chain-validation-and-sanitization"
+              }
+            }
+          ]
+        },
+        "decision-audit": {
+          "description": "AIGF MI-21 Agent Decision Audit and Explainability. Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-decision-audit",
+                "name": "Agent Decision Audit and Explainability",
+                "description": "Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-21_agent-decision-audit-and-explainability.md",
+                "aigf-id": "MI-21",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "input-to-the-firms-control",
+                "status": "supports",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-21-agent-decision-audit-and-explainability"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "remote-mcp",
@@ -65,14 +105,75 @@
           "url": "https://api.hosannaith.com/mcp"
         }
       ],
-      "development-language": "TypeScript"
+      "development-language": "TypeScript",
+      "controls": {
+        "mcp-security": {
+          "description": "AIGF MI-20 MCP Server Security Governance. What a firm vetting Hosannaith as an outside MCP server can check: open source, dependency and license checks, signed results, published schemas, release provenance, security policy.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-mcp-security",
+                "name": "MCP Server Security Governance",
+                "description": "What a firm vetting Hosannaith as an outside MCP server can check: open source, dependency and license checks, signed results, published schemas, release provenance, security policy.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-20_mcp-server-security-governance.md",
+                "aigf-id": "MI-20",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-20-mcp-server-security-governance"
+              }
+            }
+          ]
+        },
+        "tool-chain-validation": {
+          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated before payment (public http(s) URL, fixed windows, batch size; private and reserved addresses refused), and tool output cannot carry free text from a monitored endpoint.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-tool-chain-validation",
+                "name": "Tool Chain Validation and Sanitization",
+                "description": "Tool inputs are validated before payment (public http(s) URL, fixed windows, batch size; private and reserved addresses refused), and tool output cannot carry free text from a monitored endpoint.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md",
+                "aigf-id": "MI-19",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-19-tool-chain-validation-and-sanitization"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "monitor",
       "node-type": "service",
       "name": "Monitor",
       "description": "Separate long-running process that probes every enrolled endpoint about every 3 minutes WITHOUT paying, and records status, latency and what each 402 asks for (networks, x402 version, discovery metadata). Follows redirects itself and resolves every hop, refusing private or reserved addresses.",
-      "development-language": "TypeScript"
+      "development-language": "TypeScript",
+      "controls": {
+        "ai-observability": {
+          "description": "AIGF MI-04 AI System Observability. Independent measurements of the outside x402 endpoints an agent calls: availability, error rate, latency and payment gating, over rolling windows.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-ai-observability",
+                "name": "AI System Observability",
+                "description": "Independent measurements of the outside x402 endpoints an agent calls: availability, error rate, latency and payment gating, over rolling windows.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-4_ai-system-observability.md",
+                "aigf-id": "MI-04",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "input-to-the-firms-control",
+                "status": "supports-in-part",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-04-ai-system-observability"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "observation-log",
@@ -109,7 +210,28 @@
       "node-type": "service",
       "name": "Report signer",
       "description": "Operator-run tool that builds a dated public reliability report for a named set of endpoints from the observation log and signs it with the attestation key. Run only where the key is.",
-      "development-language": "TypeScript"
+      "development-language": "TypeScript",
+      "controls": {
+        "decision-audit": {
+          "description": "AIGF MI-21 Agent Decision Audit and Explainability. Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-decision-audit",
+                "name": "Agent Decision Audit and Explainability",
+                "description": "Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-21_agent-decision-audit-and-explainability.md",
+                "aigf-id": "MI-21",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "input-to-the-firms-control",
+                "status": "supports",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-21-agent-decision-audit-and-explainability"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "public-reports",
@@ -127,7 +249,47 @@
           "unique-id": "npm-client",
           "url": "https://www.npmjs.com/package/hosannaith-client"
         }
-      ]
+      ],
+      "controls": {
+        "credential-protection": {
+          "description": "AIGF MI-23 Agentic System Credential Protection Framework. Hosannaith issues no credentials. The only secret involved is the caller's own payment key, which stays with the caller. The local MCP package reads that key from an environment variable.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-credential-protection",
+                "name": "Agentic System Credential Protection Framework",
+                "description": "Hosannaith issues no credentials. The only secret involved is the caller's own payment key, which stays with the caller. The local MCP package reads that key from an environment variable.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-23_agentic-system-credential-protection-framework.md",
+                "aigf-id": "MI-23",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-23-agentic-system-credential-protection-framework"
+              }
+            }
+          ]
+        },
+        "decision-audit": {
+          "description": "AIGF MI-21 Agent Decision Audit and Explainability. Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-decision-audit",
+                "name": "Agent Decision Audit and Explainability",
+                "description": "Signed results and signed public reports that a firm can store with its agents' decisions and that anyone can verify against the published keys.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-21_agent-decision-audit-and-explainability.md",
+                "aigf-id": "MI-21",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "input-to-the-firms-control",
+                "status": "supports",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-21-agent-decision-audit-and-explainability"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "mcp-package",
@@ -139,7 +301,47 @@
           "unique-id": "npm-mcp",
           "url": "https://www.npmjs.com/package/hosannaith-mcp"
         }
-      ]
+      ],
+      "controls": {
+        "mcp-security": {
+          "description": "AIGF MI-20 MCP Server Security Governance. What a firm vetting Hosannaith as an outside MCP server can check: open source, dependency and license checks, signed results, published schemas, release provenance, security policy.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-mcp-security",
+                "name": "MCP Server Security Governance",
+                "description": "What a firm vetting Hosannaith as an outside MCP server can check: open source, dependency and license checks, signed results, published schemas, release provenance, security policy.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-20_mcp-server-security-governance.md",
+                "aigf-id": "MI-20",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-20-mcp-server-security-governance"
+              }
+            }
+          ]
+        },
+        "credential-protection": {
+          "description": "AIGF MI-23 Agentic System Credential Protection Framework. Hosannaith issues no credentials. The only secret involved is the caller's own payment key, which stays with the caller. The local MCP package reads that key from an environment variable.",
+          "requirements": [
+            {
+              "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
+              "config": {
+                "control-id": "hosannaith-credential-protection",
+                "name": "Agentic System Credential Protection Framework",
+                "description": "Hosannaith issues no credentials. The only secret involved is the caller's own payment key, which stays with the caller. The local MCP package reads that key from an environment variable.",
+                "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-23_agentic-system-credential-protection-framework.md",
+                "aigf-id": "MI-23",
+                "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+                "role": "provider",
+                "status": "partly",
+                "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md#mi-23-agentic-system-credential-protection-framework"
+              }
+            }
+          ]
+        }
+      }
     },
     {
       "unique-id": "facilitator",
@@ -695,8 +897,14 @@
       "license": "Apache-2.0",
       "scope": "Logical architecture. Hosting and deployment details are intentionally omitted.",
       "related": [
-        "https://github.com/finos-labs/open-eago/issues/72"
-      ]
+        "https://github.com/finos-labs/open-eago/issues/72",
+        "https://github.com/finos/ai-governance-framework"
+      ],
+      "aigf": {
+        "mapping": "https://github.com/cameron4316/x402-oracle-server/blob/main/docs/aigf-mapping.md",
+        "sources": "calm/aigf-sources.json",
+        "commit": "67b8c3257695d5ede09d262798bf28a0e58d4740"
+      }
     }
   ]
 }

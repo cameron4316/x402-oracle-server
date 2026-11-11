@@ -222,8 +222,8 @@ claim either for the pre-payment check. This may be worth raising with the frame
 
 The same five mitigations are attached as controls to the nodes they concern in
 [`calm/hosannaith.architecture.json`](../calm/hosannaith.architecture.json). Each control's
-`requirement-url` is the framework source file at the pinned commit, and its `config` points back to
-the matching section of this page.
+`config` carries the framework id, a `reference-url` to its source file at the pinned commit, a
+status, and a link back to the matching section of this page.
 
 | CALM control key | Mitigation | Nodes |
 |---|---|---|
@@ -234,7 +234,11 @@ the matching section of this page.
 | `ai-observability` | [MI-04] AI System Observability | `monitor` |
 
 The control keys are the ones FINOS CALM tooling uses for these mitigations
-([`calm-studio/docs/AIGF_CATALOGUE.json`](https://github.com/finos/architecture-as-code/blob/c57c3d9ab92b8c5442c8bc40dc161be7dabbcce4/calm-studio/docs/AIGF_CATALOGUE.json)).
+([`calm-studio/docs/AIGF_CATALOGUE.json`](https://github.com/finos/architecture-as-code/blob/c57c3d9ab92b8c5442c8bc40dc161be7dabbcce4/calm-studio/docs/AIGF_CATALOGUE.json)). The shape of each control follows
+FINOS's own CALM examples
+([`examples/fluxnova/fluxnova-ai-agent.architecture.json`](https://github.com/finos/architecture-as-code/blob/c57c3d9ab92b8c5442c8bc40dc161be7dabbcce4/examples/fluxnova/fluxnova-ai-agent.architecture.json)):
+`requirement-url` is CALM's base control-requirement schema, which the CALM CLI validates the
+`config` against.
 
 ## Two id forms
 

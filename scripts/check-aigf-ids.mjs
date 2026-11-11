@@ -100,6 +100,7 @@ for (const id of Object.keys(ids).filter((k) => k.startsWith('RI-'))) ok(usedInD
 
 // --- 4. CALM controls: each points at the framework source file and at a real section of the page. ---
 const arch = JSON.parse(read('calm/hosannaith.architecture.json'));
+const CONTROL_REQUIREMENT_SCHEMA = String(arch.$schema).replace(/calm\.json$/, 'control-requirement.json');
 const slug = (heading) => heading.toLowerCase().replace(/[^a-z0-9 -]/g, '').replace(/ /g, '-');
 const anchors = new Set([...doc.matchAll(/^#{2,3} (.+)$/gm)].map((m) => slug(m[1])));
 const controlled = new Set();
@@ -111,9 +112,14 @@ for (const node of arch.nodes) {
       ok(id && id in ids, `${where}: no aigf-id from the manifest`);
       if (!id || !(id in ids)) continue;
       controlled.add(id);
-      ok(req['requirement-url'] === sourceUrl(ids[id].path), `${where}: requirement-url is not the source file of ${id}`);
+      // The form FINOS uses in its own CALM examples: requirement-url is CALM's base control-requirement
+      // schema (which the CALM CLI loads and validates the config against), and the framework source
+      // file goes in the config's reference-url.
+      ok(req['requirement-url'] === CONTROL_REQUIREMENT_SCHEMA, `${where}: requirement-url is not CALM's control-requirement schema`);
+      ok(req.config['reference-url'] === sourceUrl(ids[id].path), `${where}: reference-url is not the source file of ${id}`);
       ok(control.description.includes(`AIGF ${id} ${ids[id].title}`), `${where}: description does not name ${id} and its title`);
-      ok(req.config['aigf-title'] === ids[id].title, `${where}: aigf-title differs from the manifest`);
+      ok(req.config.name === ids[id].title, `${where}: name differs from the framework title`);
+      for (const field of ['control-id', 'name', 'description']) ok(typeof req.config[field] === 'string' && req.config[field], `${where}: config has no ${field}`);
       ok(req.config['aigf-commit'] === framework.commit, `${where}: aigf-commit is not the pinned commit`);
       ok(key === catalogue.mitigations[id]?.['control-key'], `${where}: key is not the CALM catalogue's key for ${id}`);
       const [, anchor] = String(req.config.mapping ?? '').split('#');

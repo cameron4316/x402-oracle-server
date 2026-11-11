@@ -52,10 +52,13 @@ the evidence and the mitigations that do not apply are in
 How each control is written:
 
 - The key is the one FINOS CALM tooling uses for that mitigation.
-- `requirement-url` is the mitigation's source file in the framework repository, at a pinned commit.
-- `config` names the id, the title and the commit, says whether Hosannaith is the provider being
-  vetted or an input to the firm's own control, gives an honest status, and links to the matching
-  section of the mapping page.
+- The shape follows FINOS's own CALM examples (the FluxNova architectures in
+  `finos/architecture-as-code`): `requirement-url` is CALM's base control-requirement schema, and
+  the CALM CLI validates the `config` against it.
+- `config` has `control-id`, `name` and `description` as that schema requires, then:
+  `reference-url` (the mitigation's source file in the framework repository, at a pinned commit),
+  `aigf-id`, `aigf-commit`, `role` (the provider being vetted, or an input to the firm's own
+  control), an honest `status`, and `mapping` (the matching section of the mapping page).
 
 [`aigf-sources.json`](aigf-sources.json) lists every framework id we use with the file it comes
 from. `node scripts/check-aigf-ids.mjs` fails if an id appears anywhere without an entry there, or if

@@ -104,6 +104,13 @@ export interface HosannaithOptions {
   verify?: VerifyMode;
 }
 
+/** Removes trailing "/" in linear time (a `/\/+$/` regex is quadratic on long runs of slashes). */
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 /**
  * Reusable client. Builds the payment signer once; good when you'll score several endpoints.
  */
@@ -118,7 +125,7 @@ export class HosannaithClient {
     if (!opts?.mnemonic && !opts?.payingFetch) throw new Error('HosannaithClient: `mnemonic` is required.');
     this.mnemonic = opts.mnemonic;
     this.payingFetch = opts.payingFetch ?? null;
-    this.baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(opts.baseUrl ?? DEFAULT_BASE_URL);
     this.verifyMode = opts.verify ?? 'auto';
     this.keys = new KeySetCache(`${this.baseUrl}/.well-known/hosannaith-keys.json`);
   }
@@ -283,7 +290,7 @@ export function wrapFetchWithReliabilityGuard(
   const cacheTtlMs = opts.cacheTtlMs ?? 15 * 60 * 1000;
   const onUnknown = opts.onUnknown ?? 'allow';
   const onError = opts.onError ?? 'allow';
-  const baseUrl = (opts.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+  const baseUrl = trimTrailingSlashes(opts.baseUrl ?? DEFAULT_BASE_URL);
   const client = new HosannaithClient({ mnemonic: opts.mnemonic, payingFetch: opts.payingFetch, baseUrl, verify: opts.verify });
   const cache = new Map<string, { result: ReliabilityResult; expires: number }>();
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+- **Security:** moves to `zod` 4 (4.6.7 or later). zod 3 can exhaust memory while validating an
+  oversized constrained collection (GHSA-mrhx-c7xc-m3w5), and the batch tool validates a bounded
+  list of URLs. zod 3 has no fixed release. `@modelcontextprotocol/sdk` now requires 1.32.1 or later,
+  which supports zod 4.
+- Trims trailing slashes from `HOSANNAITH_BASE_URL` without a regular expression.
+
 ## 0.3.1
 
 - Fixes paying from a fresh install. `@x402/avm` 2.29 and later accept only the spec-form Algorand

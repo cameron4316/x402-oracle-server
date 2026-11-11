@@ -23,6 +23,7 @@ import { MAX_TARGET_LENGTH } from './checks/reliability/target-url.js';
 import { INFO_TOOL_ANNOTATIONS, PAID_TOOL_ANNOTATIONS, targetUrl, windowHoursArg } from './mcp-tools.js';
 import { WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { AuditLog, PAYMENT_META_KEY, PAYMENT_RESPONSE_META_KEY, withAudit } from './mcp-audit.js';
+import { trimTrailingSlashes } from './trim.js';
 
 // Same signing key and rules as the HTTP API (docs/attestation.md).
 const signer = loadSigner();
@@ -316,7 +317,7 @@ async function main(): Promise<void> {
 
   // Free liveness check. nginx maps /mcp -> / (and /mcp/health -> //health), so match the suffix.
   app.get('*', async (c, next) => {
-    if (c.req.path.replace(/\/+$/, '').endsWith('/health')) {
+    if (trimTrailingSlashes(c.req.path).endsWith('/health')) {
       return c.json({ ok: true, service: 'hosannaith-mcp', network: CONFIG.network });
     }
     await next();

@@ -78,12 +78,18 @@ test('a one-shot probe is persisted and the target enrolled for continuous monit
   await reliabilityCheck.run(target);
   fetchMock.restore();
 
-  const observed = readFileSync(observationLog, 'utf8');
-  assert.ok(observed.includes(target), 'expected the probe to be appended to observation history');
+  const observedTargets = readFileSync(observationLog, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => (JSON.parse(line) as { target: string }).target);
+  assert.ok(
+    observedTargets.some((t) => t === target),
+    'expected the probe to be appended to observation history',
+  );
 
   const enrolled: string[] = JSON.parse(readFileSync(targetsFile, 'utf8'));
   assert.ok(
-    enrolled.includes(target),
+    enrolled.some((t) => t === target),
     'expected the queried target to be enrolled so the standalone monitor picks it up',
   );
 });
@@ -165,9 +171,9 @@ test('a batch skips disallowed targets and enrolls only the allowed ones', async
   const { reliabilityBatch } = await import('../../src/checks/reliability/batch.js');
   const batch = await reliabilityBatch(['http://10.0.0.1/x', 'https://batch.example/allowed', 'http://[::1]/', 42]);
   assert.deepEqual(batch.results.map((r) => r.target), ['https://batch.example/allowed']);
-  const enrolled = readFileSync(targetsFile, 'utf8');
-  assert.ok(enrolled.includes('https://batch.example/allowed'));
-  assert.ok(!enrolled.includes('10.0.0.1') && !enrolled.includes('::1'));
+  const enrolled: string[] = JSON.parse(readFileSync(targetsFile, 'utf8'));
+  assert.ok(enrolled.some((t) => t === 'https://batch.example/allowed'));
+  assert.ok(!enrolled.some((t) => t === 'http://10.0.0.1/x' || t === 'http://[::1]/'));
 });
 
 test('windowHours: 168 and 720 read older history that the default 24 h window leaves out', async () => {

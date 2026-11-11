@@ -6,8 +6,15 @@ import algosdk from 'algosdk';
 import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
 import { ExactAvmScheme } from '@x402/avm';
 
+/** Removes trailing "/" in linear time (a `/\/+$/` regex is quadratic on long runs of slashes). */
+function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 // Where the paid /reliability endpoint lives. Override only for local testing.
-const BASE_URL = (process.env.HOSANNAITH_BASE_URL ?? 'https://api.hosannaith.com').replace(/\/+$/, '');
+const BASE_URL = trimTrailingSlashes(process.env.HOSANNAITH_BASE_URL ?? 'https://api.hosannaith.com');
 
 // Algorand MainNet network ids. The x402 SDK accepts only the spec form since @x402/avm 2.29
 // (x402-foundation/x402 #3894); older facilitator setups used the legacy full-genesis-hash form.
@@ -54,7 +61,7 @@ function payingFetchFromMnemonic(mnemonic: string): typeof fetch {
   return wrapFetchWithPayment(fetch, client) as typeof fetch;
 }
 
-const server = new McpServer({ name: 'hosannaith', version: '0.3.1' });
+const server = new McpServer({ name: 'hosannaith', version: '0.3.2' });
 
 // --- Free tool: describe the oracle so an agent knows how to read a score ---
 server.registerTool(

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Trims trailing slashes from `baseUrl` without a regular expression (CodeQL js/polynomial-redos).
+  `baseUrl` comes from your own code, so this was not exploitable remotely.
+
 ## 0.4.1
 
 - Pays Hosannaith with the spec-form Algorand network id (`algorand:wGHE2Pwdvd7S12BL5FaOP20EGYesN73k`)

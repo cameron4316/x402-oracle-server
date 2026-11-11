@@ -106,6 +106,10 @@ It is signed with the same key and scheme as results, and `"type": "hosannaith.r
 distinguishes it from a result.
 
 - Served at `https://api.hosannaith.com/reports/<id>.json`, from `public-reports/` in this repo.
+- Endpoints whose report cards carry recorded payment requirements also get a `payment` block
+  (`samples`, `acceptedNetworks`, `algorandIdForm`, `mainnetPayablePct`, `currentSdkPayablePct`).
+  These cover only 402 responses recorded since 2026-11-09, are informational, and are not part of
+  the score; the report's `method` says so.
 - Never edited after publishing: a citation always points at the numbers it quoted. A newer report
   gets a new id.
 - CI verifies every committed report against the published keys, so an unsigned or altered report

@@ -257,6 +257,12 @@ Challenge.
   currently `^2.6.1` — run `pnpm ls` for exact resolved versions).
 - Run `pnpm typecheck` after `pnpm install` to catch any API drift if you bump dependency versions.
 
+## Architecture as code
+
+[`calm/hosannaith.architecture.json`](calm/hosannaith.architecture.json) models Hosannaith in
+[FINOS CALM](https://calm.finos.org) (nodes, relationships and the paid-check, monitoring and
+verification flows), validated in CI with the official CALM CLI. See [`calm/README.md`](calm/README.md).
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).

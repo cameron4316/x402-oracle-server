@@ -81,6 +81,36 @@ export function payableOnMainnet(networks: readonly string[]): boolean {
   return networks.some((n) => classifyNetwork(n) === 'mainnet');
 }
 
+/** An Algorand id in the legacy full-genesis-hash form (reference longer than CAIP-2's 32 chars). */
+function isAlgorandLegacyId(raw: string): boolean {
+  const id = raw.trim();
+  return id.toLowerCase().startsWith('algorand:') && id.length - 'algorand:'.length > 32;
+}
+
+/**
+ * True when at least one accepted network is a known mainnet in a form the CURRENT x402 SDK accepts.
+ * Since @x402/core and @x402/avm 2.29.0 (x402-foundation/x402 #3894) the SDK refuses Algorand's
+ * legacy full-hash id, so an endpoint whose only mainnet option is that id cannot be paid by an
+ * up-to-date client, even though older clients and the GoPlausible facilitator still accept it.
+ */
+export function payableByCurrentSdk(networks: readonly string[]): boolean {
+  return networks.some((n) => classifyNetwork(n) === 'mainnet' && !isAlgorandLegacyId(n));
+}
+
+export type AlgorandIdForm = 'spec' | 'legacy' | 'both';
+
+/** Which form(s) of the Algorand MAINNET id the networks use; null when Algorand mainnet is absent. */
+export function algorandMainnetIdForm(networks: readonly string[]): AlgorandIdForm | null {
+  let spec = false;
+  let legacy = false;
+  for (const n of networks) {
+    if (normalizeNetwork(n) !== ALGORAND_MAINNET) continue;
+    if (isAlgorandLegacyId(n)) legacy = true;
+    else spec = true;
+  }
+  return spec && legacy ? 'both' : spec ? 'spec' : legacy ? 'legacy' : null;
+}
+
 export interface PaymentRequirementsSummary {
   /** The 402 carried x402 payment requirements that parse, with at least one `accepts` entry. */
   parsed: boolean;

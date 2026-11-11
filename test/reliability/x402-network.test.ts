@@ -59,3 +59,22 @@ test('decodePaymentRequiredHeader decodes base64 JSON and tolerates junk', () =>
   assert.equal(decodePaymentRequiredHeader(null), null);
   assert.equal(decodePaymentRequiredHeader('%%%not base64 json'), null);
 });
+
+test('payableByCurrentSdk: Algorand legacy-only does not count; spec form, Base, Solana do', async () => {
+  const { payableByCurrentSdk } = await import('../../src/checks/reliability/x402-network.js');
+  assert.equal(payableByCurrentSdk([ALGO_MAIN_LEGACY]), false);
+  assert.equal(payableByCurrentSdk([ALGO_MAIN_LEGACY, 'eip155:8453']), true, 'Base still payable');
+  assert.equal(payableByCurrentSdk([ALGO_MAIN]), true);
+  assert.equal(payableByCurrentSdk([ALGO_TEST_LEGACY]), false, 'testnet never counts');
+  assert.equal(payableByCurrentSdk(['solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp']), true);
+  assert.equal(payableByCurrentSdk([]), false);
+});
+
+test('algorandMainnetIdForm tells spec, legacy and both apart, ignoring testnet and other chains', async () => {
+  const { algorandMainnetIdForm } = await import('../../src/checks/reliability/x402-network.js');
+  assert.equal(algorandMainnetIdForm([ALGO_MAIN]), 'spec');
+  assert.equal(algorandMainnetIdForm([ALGO_MAIN_LEGACY, 'eip155:8453']), 'legacy');
+  assert.equal(algorandMainnetIdForm([ALGO_MAIN, ALGO_MAIN_LEGACY]), 'both');
+  assert.equal(algorandMainnetIdForm([ALGO_TEST_LEGACY, 'eip155:8453']), null);
+  assert.equal(algorandMainnetIdForm(['algorand']), 'spec', 'v1 name counts as the spec network, not legacy');
+});

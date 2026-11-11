@@ -201,6 +201,8 @@ const INFO_TEXT = [
   '    mainnetPayablePct, discoverablePct, acceptedNetworks: what the 402s said about payment',
   '      (informational, not scored): share payable on a known mainnet, share with the bazaar',
   '      discovery extension, and the networks named',
+  '    currentSdkPayablePct, algorandIdForm: whether the current x402 SDK (2.29+) can pay it (it refuses',
+  '      Algorand\'s legacy full-hash id) and which Algorand id form is offered: spec | legacy | both',
   '  }',
   'JSON Schema: https://api.hosannaith.com/schema/check-result.json',
   ...(signer

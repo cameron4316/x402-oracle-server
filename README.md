@@ -64,6 +64,8 @@ USDC on Algorand via the GoPlausible facilitator and return JSON like:
 | `mainnetPayablePct` | Of the `402`s that recorded their x402 payment requirements (`paymentRequirementsSamples`), the share whose requirements parse and name a known mainnet. A `402` alone proves gating, not that the endpoint can be paid on a mainnet (some answer with testnet-only requirements). Informational: not part of the score. |
 | `discoverablePct` | Of those `402`s, the share carrying the x402 bazaar discovery extension. Informational, never a score input. |
 | `acceptedNetworks` | Payment networks those `402`s named, exactly as sent (CAIP-2 ids or x402 v1 names). |
+| `currentSdkPayablePct` | Like `mainnetPayablePct`, but counting only network ids the **current** x402 SDK accepts. Since `@x402/core` / `@x402/avm` 2.29.0 the SDK refuses Algorand's legacy full-genesis-hash id, so an endpoint offering only that id for Algorand is payable by older clients but not by up-to-date ones. |
+| `algorandIdForm` | Which Algorand mainnet id the endpoint offers: `spec` (32-character CAIP-2 form), `legacy` (full genesis hash), `both`, or `null`. Offering `both` serves every client during the transition. |
 
 ### OpenEAGO SLO view
 

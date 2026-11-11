@@ -10,13 +10,18 @@ release schema. CI validates it with the official CLI on every pull request (job
 - **Actors:** a paying agent or application, and an auditor or relying party who verifies results
   second-hand.
 - **The oracle** (`hosannaith`, composed of): the x402 HTTP API, the remote MCP server, the monitor
-  (its own process), the observation log, the target registry, the MCP audit log, the attestation
-  signing key and the published key set (JWKS).
+  (its own process), the report signer, the observation log, the target registry, the MCP audit log,
+  the attestation signing key, the published key set (JWKS) and the signed public reports.
 - **Distributed clients:** `hosannaith-client` and `hosannaith-mcp` on npm.
 - **External systems:** the x402 facilitator (GoPlausible), Algorand mainnet, and the monitored x402
   endpoints.
-- **Flows:** a paid reliability check (402, payment, verify, score, sign, settle, client-side
-  signature verification), continuous monitoring, and independent verification by a relying party.
+- **Flows:** a paid reliability check over HTTP (402, payment, verify, score, sign, settle, client-side
+  signature verification), the same check over MCP (ending with the audit log record), continuous
+  monitoring, and independent verification by a relying party.
+
+Results are signed after payment verification and before settlement. A target with no history gets
+one unpaid live probe through the same guarded probe as the monitor, its observation is appended to
+the log, and the target is enrolled for monitoring.
 
 It is a logical architecture. Hosting and deployment details are intentionally left out.
 

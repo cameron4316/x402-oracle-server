@@ -29,7 +29,7 @@
       "unique-id": "oracle-api",
       "node-type": "service",
       "name": "Oracle HTTP API",
-      "description": "x402 resource server. GET /reliability and POST /reliability/batch are paid per call (USDC on Algorand); free routes publish the OpenAPI document, JSON Schemas, llms.txt, the signing key set and signed public reports. Refuses targets on private or reserved addresses before payment. Offers both Algorand network id forms in every 402 during the CAIP-2 transition.",
+      "description": "x402 resource server. GET /reliability and POST /reliability/batch are paid per call (USDC on Algorand); free routes publish the OpenAPI document, JSON Schemas, llms.txt, the signing key set and signed public reports. Refuses targets on private or reserved addresses before payment. A target with no history gets one unpaid live probe through the same guarded probe as the monitor (redirects followed by hand, every hop resolved, private or reserved addresses refused). Offers both Algorand network id forms in every 402 during the CAIP-2 transition.",
       "interfaces": [
         {
           "unique-id": "reliability-api",
@@ -42,6 +42,14 @@
         {
           "unique-id": "openapi",
           "url": "https://api.hosannaith.com/openapi.json"
+        },
+        {
+          "unique-id": "jwks",
+          "url": "https://api.hosannaith.com/.well-known/hosannaith-keys.json"
+        },
+        {
+          "unique-id": "public-reports-url",
+          "url": "https://api.hosannaith.com/reports/"
         }
       ],
       "development-language": "TypeScript"
@@ -94,13 +102,20 @@
       "unique-id": "key-set",
       "node-type": "data-asset",
       "name": "Published key set (JWKS)",
-      "description": "Public keys for verifying Hosannaith signatures, with RFC 7638 key ids, key status and a revoked-keys list. Served free by the API.",
-      "interfaces": [
-        {
-          "unique-id": "jwks-url",
-          "url": "https://api.hosannaith.com/.well-known/hosannaith-keys.json"
-        }
-      ]
+      "description": "Public keys for verifying Hosannaith signatures, with RFC 7638 key ids, key status and a revoked-keys list. Served free by the API (interface `jwks`)."
+    },
+    {
+      "unique-id": "report-signer",
+      "node-type": "service",
+      "name": "Report signer",
+      "description": "Operator-run tool that builds a dated public reliability report for a named set of endpoints from the observation log and signs it with the attestation key. Run only where the key is.",
+      "development-language": "TypeScript"
+    },
+    {
+      "unique-id": "public-reports",
+      "node-type": "data-asset",
+      "name": "Signed public reports",
+      "description": "Dated, signed reliability reports for named endpoints, never edited after publishing. Served free by the API and linked from hosannaith.com."
     },
     {
       "unique-id": "client-sdk",
@@ -162,11 +177,13 @@
             "oracle-api",
             "remote-mcp",
             "monitor",
+            "report-signer",
             "observation-log",
             "target-registry",
             "mcp-audit-log",
             "signing-key",
-            "key-set"
+            "key-set",
+            "public-reports"
           ]
         }
       }
@@ -198,12 +215,12 @@
     },
     {
       "unique-id": "auditor-verifies",
-      "description": "Relying party fetches the key set to verify a forwarded result",
+      "description": "Relying party fetches the published key set from the API to verify a forwarded result or a public report",
       "relationship-type": {
         "interacts": {
           "actor": "auditor",
           "nodes": [
-            "key-set"
+            "oracle-api"
           ]
         }
       }
@@ -246,17 +263,17 @@
       "protocol": "HTTPS"
     },
     {
-      "unique-id": "client-to-key-set",
-      "description": "Fetches (and caches) the published keys to verify every result's signature",
+      "unique-id": "client-to-jwks",
+      "description": "Fetches (and caches) the published key set to verify every result's signature",
       "relationship-type": {
         "connects": {
           "source": {
             "node": "client-sdk"
           },
           "destination": {
-            "node": "key-set",
+            "node": "oracle-api",
             "interfaces": [
-              "jwks-url"
+              "jwks"
             ]
           }
         }
@@ -316,7 +333,7 @@
     },
     {
       "unique-id": "api-reads-observations",
-      "description": "Reads the target's history for the requested window",
+      "description": "Reads the target's history for the requested window; appends the one-shot probe's observation for a new target",
       "relationship-type": {
         "connects": {
           "source": {
@@ -344,7 +361,7 @@
     },
     {
       "unique-id": "api-one-shot-probe",
-      "description": "One unpaid live probe for a target with no history yet",
+      "description": "One unpaid live probe for a target with no history yet (same guarded probe as the monitor)",
       "relationship-type": {
         "connects": {
           "source": {
@@ -359,7 +376,7 @@
     },
     {
       "unique-id": "api-signs",
-      "description": "Signs each result (RFC 8785 canonical JSON, ES256) after payment",
+      "description": "Signs each result (RFC 8785 canonical JSON, ES256) after payment verification, before settlement",
       "relationship-type": {
         "connects": {
           "source": {
@@ -386,8 +403,22 @@
       }
     },
     {
+      "unique-id": "api-serves-reports",
+      "description": "Serves signed public reports at /reports/<id>.json",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "oracle-api"
+          },
+          "destination": {
+            "node": "public-reports"
+          }
+        }
+      }
+    },
+    {
       "unique-id": "mcp-reads-observations",
-      "description": "Reads the target's history for the requested window",
+      "description": "Reads the target's history for the requested window; appends the one-shot probe's observation for a new target",
       "relationship-type": {
         "connects": {
           "source": {
@@ -400,8 +431,37 @@
       }
     },
     {
+      "unique-id": "mcp-enrolls-target",
+      "description": "Enrolls a newly queried target for ongoing monitoring",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "remote-mcp"
+          },
+          "destination": {
+            "node": "target-registry"
+          }
+        }
+      }
+    },
+    {
+      "unique-id": "mcp-one-shot-probe",
+      "description": "One unpaid live probe for a target with no history yet (same guarded probe as the monitor)",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "remote-mcp"
+          },
+          "destination": {
+            "node": "monitored-endpoints"
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
       "unique-id": "mcp-signs",
-      "description": "Signs each tool result after payment",
+      "description": "Signs each tool result after payment verification, before settlement",
       "relationship-type": {
         "connects": {
           "source": {
@@ -469,6 +529,48 @@
           }
         }
       }
+    },
+    {
+      "unique-id": "signer-reads-observations",
+      "description": "Reads the history behind each report",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "report-signer"
+          },
+          "destination": {
+            "node": "observation-log"
+          }
+        }
+      }
+    },
+    {
+      "unique-id": "signer-signs",
+      "description": "Signs the report",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "report-signer"
+          },
+          "destination": {
+            "node": "signing-key"
+          }
+        }
+      }
+    },
+    {
+      "unique-id": "signer-publishes",
+      "description": "Adds the signed report to the published set",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "report-signer"
+          },
+          "destination": {
+            "node": "public-reports"
+          }
+        }
+      }
     }
   ],
   "flows": [
@@ -508,9 +610,46 @@
           "description": "Facilitator settles the USDC transfer on Algorand"
         },
         {
-          "relationship-unique-id": "client-to-key-set",
+          "relationship-unique-id": "client-to-jwks",
           "sequence-number": 7,
           "description": "Client verifies the signature against the published key set before returning the result"
+        }
+      ]
+    },
+    {
+      "unique-id": "flow-paid-check-over-mcp",
+      "name": "Paid reliability check over MCP",
+      "description": "An agent calls the hosted MCP server's paid tool; the call is verified, scored, signed, settled and recorded in the audit log.",
+      "transitions": [
+        {
+          "relationship-unique-id": "agent-uses-mcp",
+          "sequence-number": 1,
+          "description": "Agent calls the paid tool with an x402 payment in the request metadata"
+        },
+        {
+          "relationship-unique-id": "mcp-to-facilitator",
+          "sequence-number": 2,
+          "description": "MCP server has the facilitator verify the payment"
+        },
+        {
+          "relationship-unique-id": "mcp-reads-observations",
+          "sequence-number": 3,
+          "description": "MCP server scores the target from its accumulated history"
+        },
+        {
+          "relationship-unique-id": "mcp-signs",
+          "sequence-number": 4,
+          "description": "MCP server signs the result"
+        },
+        {
+          "relationship-unique-id": "facilitator-to-algorand",
+          "sequence-number": 5,
+          "description": "Facilitator settles the USDC transfer on Algorand"
+        },
+        {
+          "relationship-unique-id": "mcp-writes-audit",
+          "sequence-number": 6,
+          "description": "The call is recorded in the audit log with its settlement receipt"
         }
       ]
     },
@@ -544,7 +683,7 @@
         {
           "relationship-unique-id": "auditor-verifies",
           "sequence-number": 1,
-          "description": "Relying party fetches the key set and verifies the result's signature and key status"
+          "description": "Relying party fetches the key set from the API and verifies the result's signature and key status"
         }
       ]
     }

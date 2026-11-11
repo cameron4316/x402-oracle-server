@@ -168,8 +168,10 @@ export function startMonitor(opts: {
   targets: string[] | (() => Promise<string[]>);
   intervalSeconds: number;
   store: ObservationStore;
+  /** DNS resolver for probes (tests pass a fake one; production uses the system resolver). */
+  resolve?: Resolver;
 }): () => void {
-  const { targets, intervalSeconds, store } = opts;
+  const { targets, intervalSeconds, store, resolve = systemResolver } = opts;
   const getTargets = typeof targets === 'function' ? targets : async () => targets;
   let stopped = false;
   // Guards against overlapping ticks: if probing every target (each up to a 10s timeout) ever
@@ -194,7 +196,7 @@ export function startMonitor(opts: {
         console.warn('[monitor] no targets configured — nothing to observe yet.');
       }
       for (const target of currentTargets) {
-        const obs = await probe(target);
+        const obs = await probe(target, undefined, resolve);
         await store.append(obs);
         console.log(
           `[monitor] ${obs.at} ${target} reachable=${obs.reachable} ` +

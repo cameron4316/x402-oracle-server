@@ -312,7 +312,8 @@ Field notes
 - Payment signals (informational, NOT part of the score), over the 402s that recorded their x402
   payment requirements (paymentRequirementsSamples): mainnetPayablePct = share whose requirements
   parse and name a known mainnet (a 402 can be testnet-only); discoverablePct = share carrying the
-  x402 bazaar discovery extension; acceptedNetworks = networks named, as sent;
+  x402 bazaar discovery extension; acceptedNetworks = networks named, as sent (only well-formed
+  network ids are repeated: the monitored endpoint chooses that text, so anything else is left out);
   currentSdkPayablePct = share payable on a mainnet in a form the current x402 SDK accepts (2.29+
   refuses Algorand's legacy full-hash id); algorandIdForm = spec | legacy | both | null.
 - Responses are additive-only: new optional fields may appear; existing ones never change.

@@ -109,9 +109,13 @@ export const reliabilityDetailSchema = {
     ),
     acceptedNetworks: {
       type: ['array', 'null'],
-      items: { type: 'string' },
+      // Network ids only: no spaces, at most 53 characters (see isRelayableNetworkId in x402-network.ts).
+      items: { type: 'string', pattern: '^[-_a-zA-Z0-9:+/=]{1,53}$' },
       maxItems: 10,
-      description: 'Payment networks the 402s named in the window, exactly as sent (CAIP-2 or x402 v1 names).',
+      description:
+        'Payment networks the 402s named in the window, as sent (CAIP-2 ids or x402 v1 names). ' +
+        'A monitored endpoint chooses this text, so only well-formed network ids are repeated here; ' +
+        'anything else it sent is left out.',
     },
     currentSdkPayablePct: percent(
       'Of the 402s that recorded their requirements, the share payable on a known mainnet in a form the ' +

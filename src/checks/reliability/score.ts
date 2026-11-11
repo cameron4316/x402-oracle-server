@@ -1,5 +1,5 @@
 import type { Observation } from './store.js';
-import { algorandMainnetIdForm, payableByCurrentSdk, payableOnMainnet, type AlgorandIdForm } from './x402-network.js';
+import { algorandMainnetIdForm, isRelayableNetworkId, payableByCurrentSdk, payableOnMainnet, type AlgorandIdForm } from './x402-network.js';
 import type { CheckStatus } from '../types.js';
 
 // Map a 0-100 composite score to a status. Shared by the single check and the batch so the
@@ -35,7 +35,9 @@ export interface ReliabilitySummary {
   paymentRequirementsSamples: number; // 402 probes with recorded requirements
   mainnetPayablePct: number | null; // requirements parse AND name at least one known mainnet
   discoverablePct: number | null; // carry the x402 v2 bazaar discovery extension
-  acceptedNetworks: string[] | null; // every network seen in the window, as sent (sorted, max 10)
+  // Every well-formed network id seen in the window, as sent (sorted, max 10). Text that is not shaped
+  // like a network id is never repeated here (see isRelayableNetworkId): the endpoint chooses it.
+  acceptedNetworks: string[] | null;
   // Requirements payable on a known mainnet in a form the CURRENT x402 SDK accepts (@x402/core and
   // @x402/avm 2.29+ refuse Algorand's legacy full-hash id). Lower than mainnetPayablePct when an
   // endpoint's only mainnet option is that legacy id.
@@ -117,7 +119,8 @@ function paymentSignals(obs: Observation[]) {
     paymentRequirementsSamples: recorded.length,
     mainnetPayablePct: pct(payable, recorded.length),
     discoverablePct: pct(discoverable, recorded.length),
-    acceptedNetworks: [...networks].sort().slice(0, 10),
+    // Classification above reads every value as sent; only well-formed ids are repeated to callers.
+    acceptedNetworks: [...networks].filter(isRelayableNetworkId).sort().slice(0, 10),
     currentSdkPayablePct: pct(currentSdk, recorded.length),
     algorandIdForm: algorandMainnetIdForm([...networks]),
   };

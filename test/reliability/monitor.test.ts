@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { probe, startMonitor } from '../../src/checks/reliability/monitor.js';
 import type { Observation, ObservationStore } from '../../src/checks/reliability/store.js';
 
+// Probes resolve DNS before fetching; tests use fake hosts, so resolve them instantly to a public
+// address instead of waiting on the system resolver (which made tick timing flaky in CI).
+const fakeDns = async () => [{ address: '93.184.216.34' }];
+
 // In-memory store — these tests care about probing/scheduling behaviour, not file I/O.
 class MemoryStore implements ObservationStore {
   readonly appended: Observation[] = [];
@@ -18,7 +22,7 @@ test('probe() records a reachable target that correctly demands payment', async 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response(null, { status: 402 })) as typeof fetch;
   try {
-    const result = await probe('https://target.example/paid');
+    const result = await probe('https://target.example/paid', 10_000, fakeDns);
     assert.equal(result.reachable, true);
     assert.equal(result.httpStatus, 402);
     assert.equal(result.demandedPayment, true);
@@ -35,7 +39,7 @@ test('probe() records an unreachable target without throwing', async () => {
     throw new Error('ECONNREFUSED');
   }) as typeof fetch;
   try {
-    const result = await probe('https://target.example/down');
+    const result = await probe('https://target.example/down', 10_000, fakeDns);
     assert.equal(result.reachable, false);
     assert.equal(result.httpStatus, null);
     assert.equal(result.demandedPayment, false);
@@ -50,7 +54,7 @@ test('probe() flags a 200 response as reachable but not correctly paywalled', as
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async () => new Response('ok', { status: 200 })) as typeof fetch;
   try {
-    const result = await probe('https://target.example/free');
+    const result = await probe('https://target.example/free', 10_000, fakeDns);
     assert.equal(result.reachable, true);
     assert.equal(result.httpStatus, 200);
     assert.equal(result.demandedPayment, false);
@@ -70,7 +74,7 @@ test('probe() times out and records unreachable rather than hanging', async () =
       });
     })) as typeof fetch;
   try {
-    const result = await probe('https://target.example/hangs', 30);
+    const result = await probe('https://target.example/hangs', 30, fakeDns);
     assert.equal(result.reachable, false);
     assert.equal(result.httpStatus, null);
     assert.match(result.error ?? '', /abort/i);
@@ -99,6 +103,7 @@ test('startMonitor() never runs two probes of the same target concurrently', asy
       targets: ['https://target.example/slow'],
       intervalSeconds: 0.05,
       store,
+      resolve: fakeDns,
     });
     await new Promise((resolve) => setTimeout(resolve, 420));
     stop();
@@ -125,6 +130,7 @@ test('startMonitor() re-reads a dynamic target getter on each tick', async () =>
       targets: async () => targets,
       intervalSeconds: 0.05,
       store,
+      resolve: fakeDns,
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
     targets = ['https://target.example/a', 'https://target.example/b'];

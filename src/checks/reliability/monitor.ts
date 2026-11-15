@@ -1,5 +1,6 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { failHost, pinHost, pinnedDispatcher } from './pinned-fetch.js';
 import type { Observation, ObservationStore } from './store.js';
 import { checkTarget, isRefusedAddress } from './target-url.js';
 import { decodePaymentRequiredHeader, summarizeRequirements } from './x402-network.js';
@@ -13,7 +14,9 @@ const PROBE_METHODS: ProbeMethod[] = ['GET', 'POST'];
 
 // Redirects are followed by hand (same rules as fetch: 303, and 301/302 after a POST, continue as
 // GET) so that every hop can be checked: a public endpoint must not be able to bounce a probe to our
-// own machine or a private network, and neither may a host name that resolves to one.
+// own machine or a private network, and neither may a host name that resolves to one. Each hop then
+// connects only to the addresses that were checked (pinned-fetch.ts), so a DNS answer that changes
+// between the check and the connection cannot redirect it either.
 const MAX_REDIRECTS = 10;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 // x402 v1 puts the payment requirements in a JSON body; only this much of it is read.
@@ -25,10 +28,14 @@ class RefusedHopError extends Error {}
 export type Resolver = (host: string) => Promise<Array<{ address: string }>>;
 const systemResolver: Resolver = (host) => lookup(host, { all: true, verbatim: true });
 
-/** Refuses a URL the target rules reject, or whose host currently resolves to a refused address. */
+/**
+ * Refuses a URL the target rules reject, or whose host currently resolves to a refused address.
+ * Otherwise records the checked addresses, which are then the only ones the hop can connect to.
+ */
 async function assertProbeable(url: string, resolve: Resolver, signal: AbortSignal): Promise<void> {
   const checked = checkTarget(url);
   if (!checked.ok) throw new RefusedHopError(`refused: ${checked.reason}`);
+  // Exactly the name the connection will look up (no brackets: a literal address is never looked up).
   const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) return; // literal addresses were already checked above
   let addresses: Array<{ address: string }>;
@@ -41,14 +48,19 @@ async function assertProbeable(url: string, resolve: Resolver, signal: AbortSign
         signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       }),
     ]);
-  } catch {
-    // Unresolvable (or timed out): let fetch fail, or abort, exactly as it always has.
+  } catch (err) {
+    // Timed out: abort, as always. Unresolvable: fetch still runs and fails with this same DNS
+    // error, as it always has, because the connection is given the error instead of an address.
     signal.throwIfAborted();
+    failHost(host, err instanceof Error ? err : new Error(String(err)));
     return;
   }
   if (addresses.some((a) => isRefusedAddress(a.address))) {
-    throw new RefusedHopError('refused: host resolves to a private or reserved address');
+    const refusal = new RefusedHopError('refused: host resolves to a private or reserved address');
+    failHost(host, refusal);
+    throw refusal;
   }
+  pinHost(host, addresses);
 }
 
 async function readCapped(res: Response, max: number): Promise<string | null> {
@@ -91,7 +103,7 @@ async function paymentRequirements(res: Response) {
   };
 }
 
-async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number, resolve: Resolver): Promise<Observation> {
+async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number, resolve: Resolver, dispatcher: object): Promise<Observation> {
   const at = new Date().toISOString();
   // Latency counts only time spent in fetch (every hop), not our own DNS checks, so it stays
   // comparable with observations recorded before redirects were followed by hand.
@@ -106,7 +118,8 @@ async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number,
       await assertProbeable(url, resolve, controller.signal);
       controller.signal.throwIfAborted();
       const hopStarted = Date.now();
-      const res = await fetch(url, { method: currentMethod, redirect: 'manual', signal: controller.signal });
+      // `dispatcher` makes this connection use only the addresses assertProbeable just checked.
+      const res = await fetch(url, { method: currentMethod, redirect: 'manual', signal: controller.signal, dispatcher } as RequestInit);
       latencyMs += Date.now() - hopStarted;
       const location = res.headers.get('location');
       if (REDIRECT_STATUSES.has(res.status) && location) {
@@ -149,10 +162,14 @@ async function probeOnce(target: string, method: ProbeMethod, timeoutMs: number,
 // Probe an x402 endpoint WITHOUT paying. Tries GET, then POST only if GET didn't yield a 402
 // (so GET endpoints cost exactly one request). Returns the attempt that correctly demanded
 // payment; otherwise the most informative attempt (preferring a reachable one).
+//
+// Rejects (records nothing) only if connections cannot be pinned to checked addresses in this
+// process: see pinned-fetch.ts. Every other failure is an observation.
 export async function probe(target: string, timeoutMs = 10_000, resolve: Resolver = systemResolver): Promise<Observation> {
+  const dispatcher = await pinnedDispatcher();
   let fallback: Observation | null = null;
   for (const method of PROBE_METHODS) {
-    const obs = await probeOnce(target, method, timeoutMs, resolve);
+    const obs = await probeOnce(target, method, timeoutMs, resolve, dispatcher);
     if (obs.demandedPayment) return obs;
     if (obs.error?.startsWith('refused:')) return obs; // same answer for any method
     if (!fallback || (obs.reachable && !fallback.reachable)) fallback = obs;

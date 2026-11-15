@@ -64,6 +64,35 @@ jobs:
           grep -q 'not published as "active"' "$RUNNER_TEMP/refuse.log"
           ! grep -q 'BEGIN PRIVATE KEY' "$RUNNER_TEMP/refuse.log"
 
+  # Production runs Node 24, and pinning a probe's connection to the addresses that were checked
+  # (src/checks/reliability/pinned-fetch.ts) relies on Node's own fetch implementation. So the tests,
+  # including the real-socket pinning tests, and an API start (which refuses to start if pinning does
+  # not work) also run on that version.
+  node24:
+    name: Production runtime (Node 24, tests and API start)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - name: HTTP smoke test (testnet config, unpaid)
+        env:
+          NETWORK: testnet
+          AVM_ADDRESS: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ
+          PORT: '4021'
+          MONITOR_TARGETS: ''
+          OBSERVATION_LOG: ${{ runner.temp }}/smoke24/observations.jsonl
+        run: |
+          pnpm start > "$RUNNER_TEMP/server.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4021/health > /dev/null && break; sleep 1; done
+          node scripts/smoke-free-routes.mjs http://localhost:4021 || { echo '--- server log ---'; cat "$RUNNER_TEMP/server.log"; exit 1; }
+
   sdk:
     name: hosannaith-client (typecheck, licenses)
     runs-on: ubuntu-latest

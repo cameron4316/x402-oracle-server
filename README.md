@@ -156,6 +156,15 @@ connection can only go to the addresses that were checked, so a public URL canno
 resolve a probe into a private network, even if its DNS answer changes a moment later. A batch that
 contains a refused target is rejected as a whole and never charged.
 
+## Use it as a pipeline gate
+
+[`gate/`](gate/README.md) turns signed reliability evidence into a pipeline check. A firm writes
+into its [FINOS CALM](https://calm.finos.org) architecture what each outside service must meet. The
+gate verifies signed evidence from an independent oracle (Hosannaith, or any oracle that speaks the
+contract proposed for OpenEAGO), fails the pipeline when a service falls short, and saves an
+evidence file an auditor can re-check offline. It has no dependencies. Try it with
+`node gate/demo/demo.ts`: there is nothing to install.
+
 ## Architecture and vision
 
 The architecture is deliberately **pluggable**: every paid product implements the `Check`

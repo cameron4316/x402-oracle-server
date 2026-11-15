@@ -1,0 +1,32 @@
+name: Reliability gate
+description: >-
+  Fails the job when an outside service in a CALM architecture is not shown to be reliable by
+  signed, independently verifiable evidence. Needs Node 22.18 or later on the runner; installs nothing.
+inputs:
+  architecture:
+    description: Path to the CALM architecture document that carries the external-service-reliability controls.
+    required: true
+  evidence-out:
+    description: Where to save the evidence file (signed documents, keys, checks, decisions).
+    default: reliability-gate-evidence.json
+  metrics-out:
+    description: Where to save the results as Prometheus metrics. Empty for none.
+    default: ''
+  verbose:
+    description: Set to "true" to list every check, also for controls that are met.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      # Inputs reach the script as environment variables, never as text spliced into the command.
+      env:
+        GATE_ARCHITECTURE: ${{ inputs.architecture }}
+        GATE_EVIDENCE_OUT: ${{ inputs.evidence-out }}
+        GATE_METRICS_OUT: ${{ inputs.metrics-out }}
+        GATE_VERBOSE: ${{ inputs.verbose }}
+      run: |
+        args=(check --architecture "$GATE_ARCHITECTURE" --evidence-out "$GATE_EVIDENCE_OUT")
+        if [ -n "$GATE_METRICS_OUT" ]; then args+=(--metrics-out "$GATE_METRICS_OUT"); fi
+        if [ "$GATE_VERBOSE" = "true" ]; then args+=(--verbose); fi
+        node "$GITHUB_ACTION_PATH/src/cli.ts" "${args[@]}"

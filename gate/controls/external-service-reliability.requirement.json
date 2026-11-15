@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+  "title": "External Service Reliability",
+  "description": "An outside service this system depends on must be shown to be reliable by signed evidence from an independent oracle. Checked by reliability-gate.",
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://calm.finos.org/release/1.2/meta/control-requirement.json"
+    }
+  ],
+  "properties": {
+    "control-id": {
+      "const": "external-service-reliability"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "aigf-catalog-url": {
+      "type": "string",
+      "description": "Link to the FINOS AI Governance Framework page this control relates to."
+    },
+    "aigf-risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "FINOS AI Governance Framework risk ids this control relates to."
+    },
+    "aigf-mitigations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "FINOS AI Governance Framework mitigation ids this control relates to."
+    },
+    "target": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "description": "The outside service the evidence must be about."
+    },
+    "oracle": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Expected issuer of the evidence. Compared with the document when the document names its oracle."
+    },
+    "evidence": {
+      "type": "object",
+      "description": "Where the signed evidence and the oracle's public keys are read from. Leave out when no independent evidence exists yet: the control is then not met.",
+      "properties": {
+        "format": {
+          "enum": [
+            "openeago-contract",
+            "hosannaith-report",
+            "hosannaith-result"
+          ],
+          "description": "The signed document format."
+        },
+        "from": {
+          "type": "string",
+          "minLength": 1,
+          "description": "http(s) URL or file path (relative to the architecture) of the signed document."
+        },
+        "keys": {
+          "type": "string",
+          "minLength": 1,
+          "description": "http(s) URL or file path of the oracle's public key set (JWKS). This, not the document, is the trust anchor."
+        },
+        "trusted-kids": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Optional pin: only these key ids are accepted."
+        }
+      },
+      "required": [
+        "format",
+        "from",
+        "keys"
+      ],
+      "additionalProperties": false
+    },
+    "window-hours": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 168,
+      "description": "The evidence must cover at least this many hours."
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "What the service must meet. Fractions are between 0 and 1 (0.99 means 99%). A threshold the evidence says nothing about is not met.",
+      "minProperties": 1,
+      "properties": {
+        "min-reliability-score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Lowest acceptable reliability score."
+        },
+        "min-availability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Lowest acceptable availability."
+        },
+        "max-error-rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Highest acceptable error rate."
+        },
+        "max-latency-p50-ms": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Highest acceptable median latency, in milliseconds."
+        },
+        "max-latency-p95-ms": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Highest acceptable 95th percentile latency, in milliseconds."
+        },
+        "max-latency-p99-ms": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Highest acceptable 99th percentile latency, in milliseconds."
+        },
+        "min-protocol-conformance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Lowest acceptable share of probes on which the service followed its protocol (for a pay-per-call service: demanded payment correctly)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "min-confidence": {
+      "enum": [
+        "pending",
+        "one-shot",
+        "history"
+      ],
+      "default": "history",
+      "description": "Weakest acceptable basis for the evidence. Only recorded history should satisfy a production threshold."
+    },
+    "min-observations": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Fewest observations the evidence may rest on."
+    },
+    "max-evidence-age-hours": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Oldest acceptable evidence, counted from the older of when it was signed and when the service was last observed."
+    },
+    "enforcement": {
+      "enum": [
+        "blocking",
+        "advisory"
+      ],
+      "default": "blocking",
+      "description": "blocking: an unmet control fails the pipeline. advisory: it is reported as a warning."
+    }
+  },
+  "required": [
+    "control-id",
+    "name",
+    "description",
+    "target",
+    "thresholds",
+    "max-evidence-age-hours"
+  ],
+  "additionalProperties": false
+}

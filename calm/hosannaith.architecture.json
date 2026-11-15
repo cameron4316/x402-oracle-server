@@ -55,14 +55,14 @@
       "development-language": "TypeScript",
       "controls": {
         "tool-chain-validation": {
-          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated (public http(s) URL, fixed windows; private and reserved addresses refused), before payment on the MCP tools and on the single-check route. Two gaps are stated on the mapping page: the HTTP batch route validates after payment in some cases, and a DNS answer that changes between the address check and the connection is not covered yet. Tool output cannot carry free text from a monitored endpoint.",
+          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated, and a refused request is never charged (public http(s) URL, fixed windows; private and reserved addresses refused). Probes connect only to the addresses that were checked. Tool output cannot carry free text from a monitored endpoint.",
           "requirements": [
             {
               "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
               "config": {
                 "control-id": "hosannaith-tool-chain-validation",
                 "name": "Tool Chain Validation and Sanitization",
-                "description": "Tool inputs are validated (public http(s) URL, fixed windows; private and reserved addresses refused), before payment on the MCP tools and on the single-check route. Two gaps are stated on the mapping page: the HTTP batch route validates after payment in some cases, and a DNS answer that changes between the address check and the connection is not covered yet. Tool output cannot carry free text from a monitored endpoint.",
+                "description": "Tool inputs are validated, and a refused request is never charged (public http(s) URL, fixed windows; private and reserved addresses refused). Probes connect only to the addresses that were checked. Tool output cannot carry free text from a monitored endpoint.",
                 "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md",
                 "aigf-id": "MI-19",
                 "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
@@ -127,14 +127,14 @@
           ]
         },
         "tool-chain-validation": {
-          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated (public http(s) URL, fixed windows; private and reserved addresses refused), before payment on the MCP tools and on the single-check route. Two gaps are stated on the mapping page: the HTTP batch route validates after payment in some cases, and a DNS answer that changes between the address check and the connection is not covered yet. Tool output cannot carry free text from a monitored endpoint.",
+          "description": "AIGF MI-19 Tool Chain Validation and Sanitization. Tool inputs are validated, and a refused request is never charged (public http(s) URL, fixed windows; private and reserved addresses refused). Probes connect only to the addresses that were checked. Tool output cannot carry free text from a monitored endpoint.",
           "requirements": [
             {
               "requirement-url": "https://calm.finos.org/release/1.2/meta/control-requirement.json",
               "config": {
                 "control-id": "hosannaith-tool-chain-validation",
                 "name": "Tool Chain Validation and Sanitization",
-                "description": "Tool inputs are validated (public http(s) URL, fixed windows; private and reserved addresses refused), before payment on the MCP tools and on the single-check route. Two gaps are stated on the mapping page: the HTTP batch route validates after payment in some cases, and a DNS answer that changes between the address check and the connection is not covered yet. Tool output cannot carry free text from a monitored endpoint.",
+                "description": "Tool inputs are validated, and a refused request is never charged (public http(s) URL, fixed windows; private and reserved addresses refused). Probes connect only to the addresses that were checked. Tool output cannot carry free text from a monitored endpoint.",
                 "reference-url": "https://github.com/finos/ai-governance-framework/blob/67b8c3257695d5ede09d262798bf28a0e58d4740/docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md",
                 "aigf-id": "MI-19",
                 "aigf-commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",

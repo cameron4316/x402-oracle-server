@@ -1,0 +1,64 @@
+name: AIGF sources
+
+# docs/aigf-mapping.md and the CALM controls cite the FINOS AI Governance Framework at a pinned commit.
+# The offline half of scripts/check-aigf-ids.mjs runs with the tests on every pull request. This
+# workflow does the half that needs the network:
+#   - "pinned": every cited id exists in the framework at the pinned commit, with that title, status
+#     and `mitigates` list. A pinned commit never changes, so this runs only when the files that cite
+#     it change, and once a week as a self-test.
+#   - "drift": weekly. Fails when the framework's main branch has changed a cited file, or has a risk
+#     or mitigation the mapping page does not account for, so the page cannot age without anyone
+#     noticing. A failure here means "review the mapping and move the pin", not "the build is broken".
+# Read-only: no secrets beyond the default token, no deploys, no publishing.
+on:
+  pull_request:
+    paths:
+      - calm/aigf-sources.json
+      - calm/hosannaith.architecture.json
+      - calm/README.md
+      - docs/aigf-mapping.md
+      - scripts/check-aigf-ids.mjs
+      - .github/workflows/aigf-sources.yml
+  push:
+    branches: [main]
+    paths:
+      - calm/aigf-sources.json
+      - calm/hosannaith.architecture.json
+      - calm/README.md
+      - docs/aigf-mapping.md
+      - scripts/check-aigf-ids.mjs
+      - .github/workflows/aigf-sources.yml
+  schedule:
+    - cron: '17 14 * * 1' # Mondays 14:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aigf-sources-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pinned:
+    name: AIGF ids match the framework at the pinned commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-aigf-ids.mjs --fetch
+
+  drift:
+    name: AIGF framework has not moved under the mapping
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-aigf-ids.mjs --drift main
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

@@ -1,0 +1,784 @@
+{
+  "about": "Every FINOS AI Governance Framework id used in docs/aigf-mapping.md and in the CALM controls, with the source file it comes from. Generated from the framework repository at the pinned commit; checked by scripts/check-aigf-ids.mjs.",
+  "framework": {
+    "name": "FINOS AI Governance Framework",
+    "version": "v3",
+    "repository": "https://github.com/finos/ai-governance-framework",
+    "commit": "67b8c3257695d5ede09d262798bf28a0e58d4740",
+    "commit-date": "2026-11-02",
+    "license": "CC-BY-4.0",
+    "id-convention": "RI-<NN> and MI-<NN> from each file's `sequence`, padded to two digits (CONVENTIONS.md, docs/_includes/risk-id.html, docs/_includes/mitigation-id.html)"
+  },
+  "ids": {
+    "RI-01": {
+      "kind": "risk",
+      "title": "Information Leaked To Hosted Model",
+      "path": "docs/_risks/ri-1_information-leaked-to-hosted-model.md",
+      "status": "Approved-Specification",
+      "type": "RC",
+      "domain": "leakage"
+    },
+    "RI-02": {
+      "kind": "risk",
+      "title": "Information Leaked to Vector Store",
+      "path": "docs/_risks/ri-2_information-leaked-to-vector-store.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "leakage"
+    },
+    "RI-04": {
+      "kind": "risk",
+      "title": "Hallucination and Inaccurate Outputs",
+      "path": "docs/_risks/ri-4_hallucination-and-inaccurate-outputs.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "accuracy"
+    },
+    "RI-05": {
+      "kind": "risk",
+      "title": "Foundation Model Versioning",
+      "path": "docs/_risks/ri-5_foundation-model-versioning.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "vendor"
+    },
+    "RI-06": {
+      "kind": "risk",
+      "title": "Non-Deterministic Behaviour",
+      "path": "docs/_risks/ri-6_non-deterministic-behaviour.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "accuracy"
+    },
+    "RI-07": {
+      "kind": "risk",
+      "title": "Availability of Foundational Model",
+      "path": "docs/_risks/ri-7_availability-of-foundational-model.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "vendor"
+    },
+    "RI-08": {
+      "kind": "risk",
+      "title": "Tampering With the Foundational Model",
+      "path": "docs/_risks/ri-8_tampering-with-the-foundational-model.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "components"
+    },
+    "RI-09": {
+      "kind": "risk",
+      "title": "Data Poisoning",
+      "path": "docs/_risks/ri-9_data-poisoning.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "inputs"
+    },
+    "RI-10": {
+      "kind": "risk",
+      "title": "Prompt Injection",
+      "path": "docs/_risks/ri-10_prompt-injection.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "inputs"
+    },
+    "RI-14": {
+      "kind": "risk",
+      "title": "Inadequate System Alignment",
+      "path": "docs/_risks/ri-14_inadequate-system-alignment.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "alignment"
+    },
+    "RI-16": {
+      "kind": "risk",
+      "title": "Bias and Discrimination",
+      "path": "docs/_risks/ri-16_bias-and-discrimination.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "alignment"
+    },
+    "RI-17": {
+      "kind": "risk",
+      "title": "Lack of Explainability",
+      "path": "docs/_risks/ri-17_lack-of-explainability.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "alignment"
+    },
+    "RI-18": {
+      "kind": "risk",
+      "title": "Model Overreach / Expanded Use",
+      "path": "docs/_risks/ri-18_model-overreach-expanded-use.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "agency"
+    },
+    "RI-19": {
+      "kind": "risk",
+      "title": "Data Quality and Drift",
+      "path": "docs/_risks/ri-19_data-quality-and-drift.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "accuracy"
+    },
+    "RI-20": {
+      "kind": "risk",
+      "title": "Reputational Risk",
+      "path": "docs/_risks/ri-20_reputational-risk.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "liability"
+    },
+    "RI-22": {
+      "kind": "risk",
+      "title": "Regulatory Compliance and Oversight",
+      "path": "docs/_risks/ri-22_regulatory-compliance-and-oversight.md",
+      "status": "Approved-Specification",
+      "type": "RC",
+      "domain": "liability"
+    },
+    "RI-23": {
+      "kind": "risk",
+      "title": "Intellectual Property (IP) and Copyright",
+      "path": "docs/_risks/ri-23_intellectual-property-ip-and-copyright.md",
+      "status": "Approved-Specification",
+      "type": "RC",
+      "domain": "liability"
+    },
+    "RI-24": {
+      "kind": "risk",
+      "title": "Agent Action Authorization Bypass",
+      "path": "docs/_risks/ri-24_agent-action-authorization-bypass.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "agency"
+    },
+    "RI-25": {
+      "kind": "risk",
+      "title": "Tool Chain Manipulation and Injection",
+      "path": "docs/_risks/ri-25_tool-chain-manipulation-and-injection.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "inputs"
+    },
+    "RI-26": {
+      "kind": "risk",
+      "title": "MCP Server Supply Chain Compromise",
+      "path": "docs/_risks/ri-26_mcp-server-supply-chain-compromise.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "components"
+    },
+    "RI-27": {
+      "kind": "risk",
+      "title": "Agent State Persistence Poisoning",
+      "path": "docs/_risks/ri-27_agent-state-persistence-poisoning.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "inputs"
+    },
+    "RI-28": {
+      "kind": "risk",
+      "title": "Multi-Agent Trust Boundary Violations",
+      "path": "docs/_risks/ri-28_multi-agent-trust-boundary-violations.md",
+      "status": "Approved-Specification",
+      "type": "OP",
+      "domain": "agency"
+    },
+    "RI-29": {
+      "kind": "risk",
+      "title": "Agent-Mediated Credential Discovery and Harvesting",
+      "path": "docs/_risks/ri-29_agent-mediated-credential-discovery-and-harvesting.md",
+      "status": "Approved-Specification",
+      "type": "SEC",
+      "domain": "leakage"
+    },
+    "RI-30": {
+      "kind": "risk",
+      "title": "Skill/Plugin Supply Chain Compromise",
+      "path": "docs/_risks/ri-30_skill-plugin-supply-chain-compromise.md",
+      "status": "Draft",
+      "type": "SEC",
+      "domain": "components"
+    },
+    "MI-01": {
+      "kind": "mitigation",
+      "title": "AI Data Leakage Prevention and Detection",
+      "path": "docs/_mitigations/mi-1_ai-data-leakage-prevention-and-detection.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "monitoring",
+      "mitigates": [
+        "RI-01"
+      ]
+    },
+    "MI-02": {
+      "kind": "mitigation",
+      "title": "Data Filtering From External Knowledge Bases",
+      "path": "docs/_mitigations/mi-2_data-filtering-from-external-knowledge-bases.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "filtering",
+      "mitigates": [
+        "RI-01",
+        "RI-09"
+      ]
+    },
+    "MI-03": {
+      "kind": "mitigation",
+      "title": "User/App/Model Firewalling/Filtering",
+      "path": "docs/_mitigations/mi-3_user-app-model-firewalling-filtering.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "filtering",
+      "mitigates": [
+        "RI-07",
+        "RI-10",
+        "RI-18",
+        "RI-20"
+      ]
+    },
+    "MI-04": {
+      "kind": "mitigation",
+      "title": "AI System Observability",
+      "path": "docs/_mitigations/mi-4_ai-system-observability.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "monitoring",
+      "mitigates": [
+        "RI-01",
+        "RI-05",
+        "RI-06",
+        "RI-07",
+        "RI-14",
+        "RI-18",
+        "RI-19",
+        "RI-24",
+        "RI-25",
+        "RI-26",
+        "RI-27",
+        "RI-28",
+        "RI-29"
+      ]
+    },
+    "MI-05": {
+      "kind": "mitigation",
+      "title": "System Acceptance Testing",
+      "path": "docs/_mitigations/mi-5_system-acceptance-testing.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "evaluation",
+      "mitigates": [
+        "RI-04",
+        "RI-05",
+        "RI-06",
+        "RI-14",
+        "RI-16",
+        "RI-22"
+      ]
+    },
+    "MI-06": {
+      "kind": "mitigation",
+      "title": "Data Quality & Classification/Sensitivity",
+      "path": "docs/_mitigations/mi-6_data-quality-classification-sensitivity.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "data",
+      "mitigates": [
+        "RI-01",
+        "RI-02",
+        "RI-04",
+        "RI-09",
+        "RI-16",
+        "RI-19",
+        "RI-22",
+        "RI-23"
+      ]
+    },
+    "MI-07": {
+      "kind": "mitigation",
+      "title": "Legal and Contractual Frameworks for AI Systems",
+      "path": "docs/_mitigations/mi-7_legal-and-contractual-frameworks-for-ai-systems.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "sourcing",
+      "mitigates": [
+        "RI-01",
+        "RI-08",
+        "RI-20",
+        "RI-22",
+        "RI-23"
+      ]
+    },
+    "MI-08": {
+      "kind": "mitigation",
+      "title": "Quality of Service (QoS) and DDoS Prevention for AI Systems",
+      "path": "docs/_mitigations/mi-8_quality-of-service-qos-and-ddos-prevention-for-ai-systems.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "filtering",
+      "mitigates": [
+        "RI-07"
+      ]
+    },
+    "MI-09": {
+      "kind": "mitigation",
+      "title": "AI System Alerting and Denial of Wallet (DoW) / Spend Monitoring",
+      "path": "docs/_mitigations/mi-9_ai-system-alerting-and-denial-of-wallet-dow-spend-monitoring.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "monitoring",
+      "mitigates": [
+        "RI-07"
+      ]
+    },
+    "MI-10": {
+      "kind": "mitigation",
+      "title": "AI Model Version Pinning",
+      "path": "docs/_mitigations/mi-10_ai-model-version-pinning.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "sourcing",
+      "mitigates": [
+        "RI-05",
+        "RI-06"
+      ]
+    },
+    "MI-11": {
+      "kind": "mitigation",
+      "title": "Human Feedback Loop for AI Systems",
+      "path": "docs/_mitigations/mi-11_human-feedback-loop-for-ai-systems.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "oversight",
+      "mitigates": [
+        "RI-05",
+        "RI-06",
+        "RI-14",
+        "RI-16",
+        "RI-18",
+        "RI-20"
+      ]
+    },
+    "MI-12": {
+      "kind": "mitigation",
+      "title": "Role-Based Access Control for AI Data",
+      "path": "docs/_mitigations/mi-12_role-based-access-control-for-ai-data.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "access",
+      "mitigates": [
+        "RI-01",
+        "RI-08",
+        "RI-09"
+      ]
+    },
+    "MI-13": {
+      "kind": "mitigation",
+      "title": "Providing Citations and Source Traceability for AI-Generated Information",
+      "path": "docs/_mitigations/mi-13_providing-citations-and-source-traceability-for-ai-generated-information.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "oversight",
+      "mitigates": [
+        "RI-04",
+        "RI-17",
+        "RI-20",
+        "RI-22"
+      ]
+    },
+    "MI-14": {
+      "kind": "mitigation",
+      "title": "Encryption of AI Data at Rest",
+      "path": "docs/_mitigations/mi-14_encryption-of-ai-data-at-rest.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "data",
+      "mitigates": [
+        "RI-02",
+        "RI-22"
+      ]
+    },
+    "MI-15": {
+      "kind": "mitigation",
+      "title": "Using Large Language Models for Automated Evaluation (LLM-as-a-Judge)",
+      "path": "docs/_mitigations/mi-15_using-large-language-models-for-automated-evaluation-llm-as-a-judge-.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "evaluation",
+      "mitigates": [
+        "RI-01",
+        "RI-04",
+        "RI-05",
+        "RI-06",
+        "RI-14",
+        "RI-16",
+        "RI-19"
+      ]
+    },
+    "MI-16": {
+      "kind": "mitigation",
+      "title": "Preserving Source Data Access Controls in AI Systems",
+      "path": "docs/_mitigations/mi-16_preserving-source-data-access-controls-in-ai-systems.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "data",
+      "mitigates": [
+        "RI-02",
+        "RI-22"
+      ]
+    },
+    "MI-17": {
+      "kind": "mitigation",
+      "title": "AI Firewall Implementation and Management",
+      "path": "docs/_mitigations/mi-17_ai-firewall-implementation-and-management.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "filtering",
+      "mitigates": [
+        "RI-07",
+        "RI-10",
+        "RI-18",
+        "RI-20"
+      ]
+    },
+    "MI-18": {
+      "kind": "mitigation",
+      "title": "Agent Authority Least Privilege Framework",
+      "path": "docs/_mitigations/mi-18_agent-authority-least-privilege-framework.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "access",
+      "mitigates": [
+        "RI-24",
+        "RI-18"
+      ]
+    },
+    "MI-19": {
+      "kind": "mitigation",
+      "title": "Tool Chain Validation and Sanitization",
+      "path": "docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "filtering",
+      "mitigates": [
+        "RI-25",
+        "RI-10",
+        "RI-24"
+      ]
+    },
+    "MI-20": {
+      "kind": "mitigation",
+      "title": "MCP Server Security Governance",
+      "path": "docs/_mitigations/mi-20_mcp-server-security-governance.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "sourcing",
+      "mitigates": [
+        "RI-26",
+        "RI-08",
+        "RI-01"
+      ]
+    },
+    "MI-21": {
+      "kind": "mitigation",
+      "title": "Agent Decision Audit and Explainability",
+      "path": "docs/_mitigations/mi-21_agent-decision-audit-and-explainability.md",
+      "status": "Approved-Specification",
+      "type": "DET",
+      "domain": "monitoring",
+      "mitigates": [
+        "RI-24",
+        "RI-25",
+        "RI-22"
+      ]
+    },
+    "MI-22": {
+      "kind": "mitigation",
+      "title": "Multi-Agent Isolation and Segmentation",
+      "path": "docs/_mitigations/mi-22_multi-agent-isolation-and-segmentation.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "access",
+      "mitigates": [
+        "RI-28",
+        "RI-24",
+        "RI-27"
+      ]
+    },
+    "MI-23": {
+      "kind": "mitigation",
+      "title": "Agentic System Credential Protection Framework",
+      "path": "docs/_mitigations/mi-23_agentic-system-credential-protection-framework.md",
+      "status": "Approved-Specification",
+      "type": "PREV",
+      "domain": "access",
+      "mitigates": [
+        "RI-29",
+        "RI-24",
+        "RI-26"
+      ]
+    },
+    "MI-24": {
+      "kind": "mitigation",
+      "title": "Human-in-the-Loop Action Approval Gate",
+      "path": "docs/_mitigations/mi-24_human-in-the-loop-action-approval-gate.md",
+      "status": "Draft",
+      "type": "PREV",
+      "domain": "oversight",
+      "mitigates": [
+        "RI-24",
+        "RI-18",
+        "RI-22"
+      ]
+    },
+    "MI-25": {
+      "kind": "mitigation",
+      "title": "Skill/Plugin Integrity and Governance",
+      "path": "docs/_mitigations/mi-25_skill-plugin-integrity-and-governance.md",
+      "status": "Draft",
+      "type": "PREV",
+      "domain": "sourcing",
+      "mitigates": [
+        "RI-30",
+        "RI-08",
+        "RI-09"
+      ]
+    }
+  },
+  "threat-references": {
+    "ATR-2026-00011": {
+      "title": "Instruction Injection via Tool Output",
+      "path": "docs/_data/references/atr.yml",
+      "listed-in": [
+        "docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md"
+      ]
+    },
+    "ATR-2026-00013": {
+      "title": "Tool-Driven Server-Side Request Forgery",
+      "path": "docs/_data/references/atr.yml",
+      "listed-in": [
+        "docs/_mitigations/mi-19_tool-chain-validation-and-sanitization.md"
+      ]
+    }
+  },
+  "calm-catalogue": {
+    "repository": "https://github.com/finos/architecture-as-code",
+    "commit": "c57c3d9ab92b8c5442c8bc40dc161be7dabbcce4",
+    "path": "calm-studio/docs/AIGF_CATALOGUE.json",
+    "catalogue-version": "2.0",
+    "generated-at": "2026-03-14",
+    "mitigations": {
+      "MI-01": {
+        "air-id": "AIR-DET-001",
+        "control-key": "data-leakage-prevention",
+        "title": "AI Data Leakage Prevention and Detection"
+      },
+      "MI-02": {
+        "air-id": "AIR-PREV-002",
+        "control-key": "data-filtering",
+        "title": "Data Filtering From External Knowledge Bases"
+      },
+      "MI-03": {
+        "air-id": "AIR-PREV-003",
+        "control-key": "edge-protection",
+        "title": "User/App/Model Firewalling/Filtering"
+      },
+      "MI-04": {
+        "air-id": "AIR-DET-004",
+        "control-key": "ai-observability",
+        "title": "AI System Observability"
+      },
+      "MI-05": {
+        "air-id": "AIR-PREV-005",
+        "control-key": "acceptance-testing",
+        "title": "System Acceptance Testing"
+      },
+      "MI-06": {
+        "air-id": "AIR-PREV-006",
+        "control-key": "data-governance",
+        "title": "Data Quality & Classification/Sensitivity"
+      },
+      "MI-07": {
+        "air-id": "AIR-PREV-007",
+        "control-key": "legal-contractual-frameworks",
+        "title": "Legal and Contractual Frameworks for AI Systems"
+      },
+      "MI-08": {
+        "air-id": "AIR-PREV-008",
+        "control-key": "qos-ddos-prevention",
+        "title": "Quality of Service (QoS) and DDoS Prevention for AI Systems"
+      },
+      "MI-09": {
+        "air-id": "AIR-DET-009",
+        "control-key": "cost-alerting",
+        "title": "AI System Alerting and Denial of Wallet (DoW) / Spend Monitoring"
+      },
+      "MI-10": {
+        "air-id": "AIR-PREV-010",
+        "control-key": "model-version-pinning",
+        "title": "AI Model Version Pinning"
+      },
+      "MI-11": {
+        "air-id": "AIR-DET-011",
+        "control-key": "human-feedback-loop",
+        "title": "Human Feedback Loop for AI Systems"
+      },
+      "MI-12": {
+        "air-id": "AIR-PREV-012",
+        "control-key": "ai-data-access-control",
+        "title": "Role-Based Access Control for AI Data"
+      },
+      "MI-13": {
+        "air-id": "AIR-DET-013",
+        "control-key": "citations-traceability",
+        "title": "Providing Citations and Source Traceability for AI-Generated Information"
+      },
+      "MI-14": {
+        "air-id": "AIR-PREV-014",
+        "control-key": "data-encryption",
+        "title": "Encryption of AI Data at Rest"
+      },
+      "MI-15": {
+        "air-id": "AIR-DET-015",
+        "control-key": "llm-as-judge-evaluation",
+        "title": "Using Large Language Models for Automated Evaluation (LLM-as-a-Judge)"
+      },
+      "MI-16": {
+        "air-id": "AIR-DET-016",
+        "control-key": "source-data-access-controls",
+        "title": "Preserving Source Data Access Controls in AI Systems"
+      },
+      "MI-17": {
+        "air-id": "AIR-PREV-017",
+        "control-key": "ai-firewall",
+        "title": "AI Firewall Implementation and Management"
+      },
+      "MI-18": {
+        "air-id": "AIR-PREV-018",
+        "control-key": "agent-least-privilege",
+        "title": "Agent Authority Least Privilege Framework"
+      },
+      "MI-19": {
+        "air-id": "AIR-PREV-019",
+        "control-key": "tool-chain-validation",
+        "title": "Tool Chain Validation and Sanitization"
+      },
+      "MI-20": {
+        "air-id": "AIR-PREV-020",
+        "control-key": "mcp-security",
+        "title": "MCP Server Security Governance"
+      },
+      "MI-21": {
+        "air-id": "AIR-DET-021",
+        "control-key": "decision-audit",
+        "title": "Agent Decision Audit and Explainability"
+      },
+      "MI-22": {
+        "air-id": "AIR-PREV-022",
+        "control-key": "agent-isolation",
+        "title": "Multi-Agent Isolation and Segmentation"
+      },
+      "MI-23": {
+        "air-id": "AIR-PREV-023",
+        "control-key": "credential-protection",
+        "title": "Agentic System Credential Protection Framework"
+      }
+    },
+    "risks": {
+      "RI-01": {
+        "air-id": "AIR-RC-001",
+        "title": "Information Leaked To Hosted Model"
+      },
+      "RI-02": {
+        "air-id": "AIR-SEC-002",
+        "title": "Information Leaked to Vector Store"
+      },
+      "RI-04": {
+        "air-id": "AIR-OP-004",
+        "title": "Hallucination and Inaccurate Outputs"
+      },
+      "RI-05": {
+        "air-id": "AIR-OP-005",
+        "title": "Foundation Model Versioning"
+      },
+      "RI-06": {
+        "air-id": "AIR-OP-006",
+        "title": "Non-Deterministic Behaviour"
+      },
+      "RI-07": {
+        "air-id": "AIR-OP-007",
+        "title": "Availability of Foundational Model"
+      },
+      "RI-08": {
+        "air-id": "AIR-SEC-008",
+        "title": "Tampering With the Foundational Model"
+      },
+      "RI-09": {
+        "air-id": "AIR-SEC-009",
+        "title": "Data Poisoning"
+      },
+      "RI-10": {
+        "air-id": "AIR-SEC-010",
+        "title": "Prompt Injection"
+      },
+      "RI-14": {
+        "air-id": "AIR-OP-014",
+        "title": "Inadequate System Alignment"
+      },
+      "RI-16": {
+        "air-id": "AIR-OP-016",
+        "title": "Bias and Discrimination"
+      },
+      "RI-17": {
+        "air-id": "AIR-OP-017",
+        "title": "Lack of Explainability"
+      },
+      "RI-18": {
+        "air-id": "AIR-OP-018",
+        "title": "Model Overreach / Expanded Use"
+      },
+      "RI-19": {
+        "air-id": "AIR-OP-019",
+        "title": "Data Quality and Drift"
+      },
+      "RI-20": {
+        "air-id": "AIR-OP-020",
+        "title": "Reputational Risk"
+      },
+      "RI-22": {
+        "air-id": "AIR-RC-022",
+        "title": "Regulatory Compliance and Oversight"
+      },
+      "RI-23": {
+        "air-id": "AIR-RC-023",
+        "title": "Intellectual Property (IP) and Copyright"
+      },
+      "RI-24": {
+        "air-id": "AIR-SEC-024",
+        "title": "Agent Action Authorization Bypass"
+      },
+      "RI-25": {
+        "air-id": "AIR-SEC-025",
+        "title": "Tool Chain Manipulation and Injection"
+      },
+      "RI-26": {
+        "air-id": "AIR-SEC-026",
+        "title": "MCP Server Supply Chain Compromise"
+      },
+      "RI-27": {
+        "air-id": "AIR-SEC-027",
+        "title": "Agent State Persistence Poisoning"
+      },
+      "RI-28": {
+        "air-id": "AIR-OP-028",
+        "title": "Multi-Agent Trust Boundary Violations"
+      },
+      "RI-29": {
+        "air-id": "AIR-SEC-029",
+        "title": "Agent-Mediated Credential Discovery and Harvesting"
+      }
+    }
+  }
+}

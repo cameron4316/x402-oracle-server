@@ -263,6 +263,11 @@ Challenge.
 [FINOS CALM](https://calm.finos.org) (nodes, relationships and the paid-check, monitoring and
 verification flows), validated in CI with the official CALM CLI. See [`calm/README.md`](calm/README.md).
 
+How Hosannaith relates to the [FINOS AI Governance Framework](https://github.com/finos/ai-governance-framework)
+is set out in [`docs/aigf-mapping.md`](docs/aigf-mapping.md): which mitigations apply, the evidence,
+what is not done, and what does not apply. The same mitigations are attached to the CALM model as
+controls.
+
 ## Security
 
 To report a vulnerability, email security@hosannaith.com or use GitHub's private vulnerability

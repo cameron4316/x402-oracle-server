@@ -236,7 +236,18 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = []): Aud
   if (trusted.some((t) => t === null)) problems.push('a trusted key set is not a JWKS-style object with a "keys" list');
   const now = new Date(value.evaluated_at);
 
-  const controls = value.controls.map((record): AuditControl => {
+  const controls = value.controls.map((record, index): AuditControl => {
+    try {
+      return auditControl(record);
+    } catch {
+      // The file is untrusted input: a record this code cannot even read is a finding.
+      problems.push(`control ${index + 1}: the record is malformed`);
+      return { id: `control ${index + 1}`, control_key: '', recorded: 'invalid', recomputed: 'invalid', consistent: false, reason: 'the record is malformed', kid: null, key_confirmed: null };
+    }
+  });
+
+  function auditControl(record: ControlRecord): AuditControl {
+    if (typeof record !== 'object' || record === null || typeof record.id !== 'string') throw new Error('malformed record');
     const parsed = parseControlConfig(record.config);
     let recomputed: Decision;
     let consistent: boolean;
@@ -275,7 +286,7 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = []): Aud
       if (!keyConfirmed) problems.push(`${record.id}: key ${kid} is not in the trusted key set (or is revoked there)`);
     }
     return { id: record.id, control_key: record.control_key, recorded: record.decision, recomputed, consistent, reason, kid, key_confirmed: keyConfirmed };
-  });
+  }
 
   const expected = controls.some((c) => c.recomputed === 'fail' || c.recomputed === 'invalid') ? 'fail' : 'pass';
   const resultOk = value.result === expected;

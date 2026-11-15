@@ -132,6 +132,18 @@ test('a degraded service fails the gate; advisory controls and missing evidence 
   for (const line of metrics.trim().split('\n')) assert.match(line, /^(# (HELP|TYPE) \w+ .+|\w+(\{[^}]*\})? -?[\d.e+-]+)$/, line);
 });
 
+test('the mock oracle refuses what it has no figures for', async () => {
+  for (const target of ['__proto__', 'constructor', 'https://unknown.example/']) {
+    const res = await fetch(`${oracle.url}/reliability?target=${encodeURIComponent(target)}`);
+    assert.equal(res.status, 404, target);
+  }
+  assert.equal((await fetch(`${oracle.url}/reliability`)).status, 400);
+  assert.equal((await fetch(`${oracle.url}/reliability?target=${encodeURIComponent(BUREAU)}&window_hours=0`)).status, 400);
+  const doc = (await (await fetch(`${oracle.url}/reliability?target=${encodeURIComponent(BUREAU)}&window_hours=24`)).json()) as { observations: number; notice: string };
+  assert.equal(doc.observations, 480);
+  assert.match(doc.notice, /Not a measurement/);
+});
+
 test('an oracle that cannot be reached is a failed control, not a crash and not a pass', async () => {
   const dead = 'http://127.0.0.1:9/reliability';
   const architecture = writeArchitecture('dead.json', [node('bureau', mockControl(BUREAU, { evidence: { format: 'openeago-contract', from: dead, keys: 'http://127.0.0.1:9/keys.json' } }))]);
@@ -180,6 +192,11 @@ test('editing a saved evidence file is caught, even when its digest is recompute
 
   assert.equal(auditBundle({ type: 'something-else' }).ok, false);
   assert.equal(auditBundle(null).ok, false);
+  // A file whose records are not even the right shape is a finding, not a crash.
+  const mangled = auditBundle(reDigest({ ...structuredClone(bundle), controls: [null, 'x', {}] as unknown as Bundle['controls'] }));
+  assert.equal(mangled.ok, false);
+  assert.equal(mangled.controls.length, 3);
+  assert.match(mangled.problems.join('\n'), /control 1: the record is malformed/);
 });
 
 test('the command line: exit codes, files written, and the audit command', async () => {

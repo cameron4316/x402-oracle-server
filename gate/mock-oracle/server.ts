@@ -79,7 +79,7 @@ export async function startMockOracle(options: { port?: number; scenario: Scenar
       const windowHours = Number(url.searchParams.get('window_hours') ?? 168);
       if (!target) return json(res, 400, { error: 'target is required' });
       if (!Number.isInteger(windowHours) || windowHours < 1 || windowHours > 720) return json(res, 400, { error: 'window_hours must be 1 to 720' });
-      const figures = scenario.services[target];
+      const figures = Object.hasOwn(scenario.services, target) ? scenario.services[target] : undefined;
       if (!figures) return json(res, 404, { error: `no history for ${target}` });
       const { observations_per_hour, ...values } = figures;
       const at = now().toISOString();

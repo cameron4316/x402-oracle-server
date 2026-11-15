@@ -39,7 +39,6 @@
     },
     "target": {
       "type": "string",
-      "format": "uri",
       "pattern": "^https?://",
       "description": "The outside service the evidence must be about."
     },

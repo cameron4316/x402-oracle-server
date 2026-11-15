@@ -28,9 +28,15 @@ export async function loadJson(ref: string, baseDir: string): Promise<Loaded> {
       // No redirects: the architecture names the exact place, and that is the place that is read.
       const res = await fetch(ref, { redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS), headers: { accept: 'application/json' } });
       if (!res.ok) return { ok: false, error: `HTTP ${res.status} from ${ref}` };
-      const length = Number(res.headers.get('content-length') ?? 0);
-      if (length > MAX_BYTES) return { ok: false, error: `response from ${ref} is larger than ${MAX_BYTES} bytes` };
-      text = await res.text();
+      // Stop reading as soon as the limit is passed, whatever the server said the length would be.
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      for await (const chunk of res.body ?? []) {
+        size += chunk.byteLength;
+        if (size > MAX_BYTES) return { ok: false, error: `response from ${ref} is larger than ${MAX_BYTES} bytes` };
+        chunks.push(chunk);
+      }
+      text = Buffer.concat(chunks).toString('utf8');
     } else {
       text = await readFile(describeRef(ref, baseDir), 'utf8');
     }

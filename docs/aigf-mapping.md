@@ -29,7 +29,7 @@ This is a self-assessment by the maintainer. It is not a certification, and FINO
 | Mitigation | Hosannaith's role | Status | CALM control |
 |---|---|---|---|
 | [MI-20] MCP Server Security Governance | The MCP server a firm vets | Partly | `mcp-security` |
-| [MI-19] Tool Chain Validation and Sanitization | Validates tool inputs, constrains tool output | Partly: server side yes, agent side yours | `tool-chain-validation` |
+| [MI-19] Tool Chain Validation and Sanitization | Validates tool inputs, constrains tool output | Partly: two gaps on the server side are stated; the agent side is yours | `tool-chain-validation` |
 | [MI-23] Agentic System Credential Protection Framework | The only secret involved is your own payment key | Partly | `credential-protection` |
 | [MI-21] Agent Decision Audit and Explainability | Supplies signed, checkable records | Yours, supported | `decision-audit` |
 | [MI-04] AI System Observability | Supplies measurements of outside endpoints | Yours, supported in part | `ai-observability` |
@@ -58,10 +58,11 @@ monitoring. This table is what Hosannaith gives that review.
 | Tier 1: TLS for all MCP communications | The MCP server and API are served over HTTPS. Protocol version and cipher choices are not stated here. | Partly | `https://api.hosannaith.com/mcp` |
 | Tier 1: human approval before an agent acts on a server's tools | Yours. Two things help: the paid tools are annotated read-only and non-destructive, and every paid call needs a payment your client must sign, which is a natural approval point. | Yours | `src/mcp-tools.ts` |
 | Section 1: security certifications, penetration testing | None. Hosannaith is maintained by one person and holds no SOC 2 or ISO 27001 certification. No third-party penetration test has been done. | No | |
+| Section 1: ownership, financial stability and regulatory standing of the provider | Hosannaith is an independent project owned and run by one person (the copyright holder named in `NOTICE`). It publishes no financial statements and claims no regulatory licence or registration. What limits the risk if it stopped: all the code is open source, results already issued stay verifiable because the public keys are in this repository, and Hosannaith never holds a caller's funds (each payment is for one call). | No | `NOTICE`, `LICENSE`, `attest/jwks-history.json` |
 | Section 1: SLA for security, data handling and availability | No terms of service or SLA are published yet. | No | |
 | Section 2: mutual authentication | Not offered. | No | |
 | Section 2: API keys, OAuth, access tokens | None exist, by design. There are no accounts. Access to the paid tools is by x402 payment, so there is no Hosannaith credential for you to store, rotate or leak. | Yes (by design) | `/llms.txt`, `/.well-known/x402` |
-| Section 2: communication audit logs | The MCP server writes one line per tool call: time, tool, target without its query string, whether it was paid, the settlement receipt or the quote offered, and duration. It never logs payment payloads or result bodies. The log is size-bounded and is a plain file, not tamper-evident. | Partly | `src/mcp-audit.ts` |
+| Section 2: communication audit logs | The MCP server writes one line per tool call: time, tool, target without its query string, whether it was paid, the outcome, the result's status and score, the settlement receipt (which includes the payer address) or the quote offered, the duration, and up to 200 characters of any error text. It never logs payment payloads or result bodies. The log rotates by size and keeps one older file, so it holds at most about twice its size limit (20 MiB by default). It is a plain file, not tamper-evident. | Partly | `src/mcp-audit.ts` |
 | Section 3: cryptographic signatures on data from the server | Every result is signed (ES256 over RFC 8785 canonical JSON), and every batch as a whole. Public keys, retired keys and revoked keys are published and also committed to the repository. | Yes | [docs/attestation.md](attestation.md), `/.well-known/hosannaith-keys.json`, `attest/jwks-history.json` |
 | Section 3: schema validation of data from the server | JSON Schemas for every response shape and an OpenAPI 3.1 description are published. | Yes | `/schema/check-result.json`, `/schema/batch-result.json`, `/openapi.json` |
 | Section 3: data versioning | The signed body carries `spec_version` (semantic versioning). | Yes | [docs/attestation.md](attestation.md) |
@@ -74,7 +75,8 @@ monitoring. This table is what Hosannaith gives that review.
 
 What you send to Hosannaith: the URLs you ask about, an optional window, and an x402 payment. No
 prompts, no customer data. What it stores: its own observations of public endpoints, and the call
-log described above (payer address, target without its query string, receipt). The application does not encrypt these
+log described above (payer address, target without its query string, result status and score,
+receipt). The application does not encrypt these
 at rest.
 
 Limits worth knowing:
@@ -85,8 +87,10 @@ Limits worth knowing:
   attacker could sign false results until the key is revoked.
 - Clients fetch the public keys from the same origin as the results, over TLS. For an independent
   check, compare them with `attest/jwks-history.json` in this repository.
-- `hosannaith-client` verifies every signature by default. The local `hosannaith-mcp` package does
-  not verify signatures itself yet; it relies on TLS to the API.
+- `hosannaith-client` verifies every result by default and refuses one whose signature is bad,
+  missing or made with a revoked key. If it cannot fetch the key set, the default mode still returns
+  the result, marked `jwks_unavailable`; only `strict` mode refuses it. The local `hosannaith-mcp`
+  package does not verify signatures itself yet; it relies on TLS to the API.
 - There is no per-caller rate limit in the application.
 
 ### MI-19 Tool Chain Validation and Sanitization
@@ -99,8 +103,8 @@ Request Forgery) and [ATR-2026-00011] (Instruction Injection via Tool Output).
 
 | What the source asks for | Hosannaith | Status | Where to check |
 |---|---|---|---|
-| Section 2: parameter schema, format and range validation | A target must be a public `http` or `https` URL of at most 2048 characters with no credentials. The window must be 24, 168 or 720 hours. A batch takes 1 to 50 targets. Anything else is refused before any payment is asked for. | Yes | `src/mcp-tools.ts`, `src/checks/reliability/target-url.ts`, `src/checks/reliability/window.ts`, `src/index.ts` |
-| Section 2: injection prevention, here server-side request forgery ([ATR-2026-00013]) | Hosannaith fetches the URLs it is given, so it refuses loopback, private, link-local (including cloud metadata), carrier-grade NAT, multicast and reserved addresses and internal host names. It checks again at probe time: DNS is resolved for every hop and redirects are followed by hand, so a public name cannot lead to a private address. | Yes | `src/checks/reliability/target-url.ts`, `src/checks/reliability/monitor.ts` |
+| Section 2: parameter schema, format and range validation | A target must be a public `http` or `https` URL of at most 2048 characters with no credentials. The window must be 24, 168 or 720 hours. On the MCP tools (a batch there takes 1 to 50 targets) and on `GET /reliability`, anything else is refused before any payment is asked for. On `POST /reliability/batch` the same checks run before payment only when the body declares a length of at most 256 KB. Otherwise they run after payment, where disallowed targets are skipped. A batch of more than 50 targets is cut to 50, and the result says so. A request the paid handler rejects with an error is not charged: the x402 middleware does not settle a response with status 400 or above. | Partly | `src/mcp-tools.ts`, `src/checks/reliability/target-url.ts`, `src/checks/reliability/window.ts`, `src/checks/reliability/batch.ts`, `src/index.ts` |
+| Section 2: injection prevention, here server-side request forgery ([ATR-2026-00013]) | Hosannaith fetches the URLs it is given, so it refuses loopback, private, link-local (including cloud metadata), carrier-grade NAT, multicast and reserved addresses and internal host names. It checks again at probe time: redirects are followed by hand, and before every hop it checks the addresses the host name resolves to. The connection then resolves the name again, so a DNS answer that changes between the check and the connection is not covered yet. | Partly | `src/checks/reliability/target-url.ts`, `src/checks/reliability/monitor.ts` |
 | Section 3: outputs from one tool sanitized before they feed the next ([ATR-2026-00011]) | A result is structured JSON that matches a published schema: numbers, closed lists of status words, timestamps, and the caller's own target. One field holds text chosen by a monitored endpoint, the payment network names in its 402. That text is repeated only when it is shaped like a network id (no spaces, at most 53 characters). Anything else is left out. | Yes | `src/checks/reliability/x402-network.ts` (`isRelayableNetworkId`), `src/contract/schema.ts` |
 | Section 1: decision logging for tool selection | Yours. If you use the payment guard in `hosannaith-client`, it calls you back with every allow or block decision and its basis. | Yours | `sdk/typescript/index.ts` (`onDecision`) |
 | Section 4: alerts on validation failures | Refused inputs are answered with an error and are not charged, but Hosannaith raises no alert on repeated failures. | No | |
@@ -266,8 +270,10 @@ the ones used on this page, as that catalogue gives them:
 Framework: FINOS AI Governance Framework, version v3, commit `67b8c3257695d5ede09d262798bf28a0e58d4740`
 (2026-11-02), licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Copyright FINOS.
 This page describes and refers to the framework's text; it does not reproduce it. Machine-readable
-copy of this table: [`calm/aigf-sources.json`](../calm/aigf-sources.json), checked in CI against the
-framework repository by `scripts/check-aigf-ids.mjs`.
+copy of this table: [`calm/aigf-sources.json`](../calm/aigf-sources.json). `scripts/check-aigf-ids.mjs`
+checks this page against it with every test run, and checks it against the framework repository
+whenever these files change and once a week. The weekly run also reports if the framework has changed
+any of the files cited here since the pinned commit.
 
 Files read to write this page:
 

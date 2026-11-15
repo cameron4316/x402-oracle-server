@@ -36,7 +36,7 @@ the CALM VS Code extension or render it with `calm docify`.
 
 ## Controls: FINOS AI Governance Framework
 
-Five nodes carry CALM `controls` that link to mitigations in the
+Six nodes carry five CALM `controls` that link to mitigations in the
 [FINOS AI Governance Framework](https://github.com/finos/ai-governance-framework). The reasoning,
 the evidence and the mitigations that do not apply are in
 [`docs/aigf-mapping.md`](../docs/aigf-mapping.md).
@@ -62,5 +62,7 @@ How each control is written:
 
 [`aigf-sources.json`](aigf-sources.json) lists every framework id we use with the file it comes
 from. `node scripts/check-aigf-ids.mjs` fails if an id appears anywhere without an entry there, or if
-a link or control points at a different file. It runs with the tests. With `--fetch` it also checks
-the entries against the framework repository itself, which CI does.
+a link or control points at a different file, or if a file named as evidence on the mapping page no
+longer exists. It runs with the tests. With `--fetch` it also checks the entries against the framework
+repository itself; a separate workflow does that whenever these files change and once a week, and the
+weekly run also reports if the framework has changed any cited file since the pinned commit.

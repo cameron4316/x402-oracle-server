@@ -6,12 +6,18 @@
 //                                                    #   finos/ai-governance-framework at the pinned commit
 //   node scripts/check-aigf-ids.mjs --fetch          # also: the same, read from GitHub at the pinned commit
 //                                                    #   (plus the CALM catalogue the older ids come from)
+//   node scripts/check-aigf-ids.mjs --drift [ref]    # has the framework moved under us? Compares the
+//                                                    #   manifest with the framework's `ref` (default main)
 //
 // Offline it proves no id appears in docs/aigf-mapping.md or the CALM files without a manifest entry,
-// that every link and every CALM control points at the manifest's source file, and that all of the
-// framework's mitigations are accounted for (applied or rejected, never both, never missing).
+// that every link and every CALM control points at the manifest's source file, that all of the
+// framework's mitigations are accounted for (applied or rejected, never both, never missing), and that
+// every file, symbol and route named as evidence on the mapping page still exists in this repository.
 // With --source or --fetch it proves the manifest itself matches the framework: each file exists and
 // its front matter carries that sequence number, title, status and `mitigates` list.
+// With --drift it fails when a cited file has changed those fields, moved or gone at `ref`, or when the
+// framework has a risk or mitigation this page does not account for (set GITHUB_TOKEN to list them
+// without hitting the anonymous rate limit).
 // No dependencies. Exit code 0 only if every check passes.
 import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -23,6 +29,7 @@ const read = (rel) => readFileSync(join(root, rel), 'utf8');
 const args = process.argv.slice(2);
 const sourceDir = args.includes('--source') ? args[args.indexOf('--source') + 1] : null;
 const doFetch = args.includes('--fetch');
+const driftRef = args.includes('--drift') ? (args[args.indexOf('--drift') + 1] ?? 'main').replace(/^--.*/, 'main') : null;
 
 const manifest = JSON.parse(read('calm/aigf-sources.json'));
 const { framework, ids, 'threat-references': threats, 'calm-catalogue': catalogue } = manifest;
@@ -97,6 +104,40 @@ for (const id of allMitigations) {
 }
 for (const id of applied) ok(new RegExp(`^### ${id} `, 'm').test(doc), `${id}: applied but has no section`);
 for (const id of Object.keys(ids).filter((k) => k.startsWith('RI-'))) ok(usedInDoc.has(id), `${id}: risk is not accounted for on the mapping page`);
+
+// --- 3b. Evidence on the mapping page still exists: files, symbols, routes and relative links. ---
+// The last column of every table in Part 1 and Part 2 ("Where to check") may hold only repository
+// paths, a symbol in parentheses after its file, routes (starting with "/") and URLs.
+const evidenceStart = doc.indexOf('\n## Part 1');
+const evidenceEnd = doc.indexOf('\n## Risks');
+ok(evidenceStart > 0 && evidenceEnd > evidenceStart, 'docs/aigf-mapping.md: cannot find Part 1 .. Risks');
+const routeSource = ['src/index.ts', 'src/mcp-remote.ts', 'src/contract/openapi.ts'].map(read).join('\n');
+let evidenceItems = 0;
+for (const line of doc.slice(evidenceStart, evidenceEnd).split('\n')) {
+  if (!line.startsWith('| ') || /^\|[-| ]+\|$/.test(line)) continue;
+  const cells = line.replace(/\s*\|\s*$/, '').split(' | ');
+  if (cells.length < 3) continue;
+  let cell = cells[cells.length - 1];
+  for (const [, file, symbol] of cell.matchAll(/`([^`]+)` \(`([^`]+)`\)/g)) {
+    evidenceItems++;
+    ok(existsSync(join(root, file)) && read(file).includes(symbol), `docs/aigf-mapping.md: \`${symbol}\` is not in ${file}`);
+  }
+  cell = cell.replace(/ \(`[^`]+`\)/g, '');
+  for (const [, token] of cell.matchAll(/`([^`]+)`/g)) {
+    evidenceItems++;
+    if (/^https?:/.test(token)) continue;
+    if (token.startsWith('/')) {
+      const family = '/' + token.split('/')[1];
+      ok(routeSource.includes(family), `docs/aigf-mapping.md: route ${token} is not served by the API or MCP server`);
+      continue;
+    }
+    ok(existsSync(join(root, token)), `docs/aigf-mapping.md: evidence file ${token} does not exist`);
+  }
+}
+ok(evidenceItems >= 20, `docs/aigf-mapping.md: only ${evidenceItems} evidence items found (the tables may have changed shape)`);
+for (const [, target] of doc.matchAll(/\]\((?!https?:|#)([^)\s]+)\)/g)) {
+  ok(existsSync(join(root, 'docs', target.split('#')[0])), `docs/aigf-mapping.md: link target ${target} does not exist`);
+}
 
 // --- 4. CALM controls: each points at the framework source file and at a real section of the page. ---
 const arch = JSON.parse(read('calm/hosannaith.architecture.json'));
@@ -204,13 +245,53 @@ if (sourceDir) {
   }
   await checkAgainst(async (path) => readFileSync(join(sourceDir, path), 'utf8'), 'source');
 }
+// Three attempts, so one dropped connection does not fail a run. A 404 is an answer, not a blip.
+// Once the network has failed three times running, later requests fail at once instead of each
+// waiting through its own retries.
+let unreachable = null;
+async function get(url, headers = {}) {
+  if (unreachable) throw unreachable;
+  let last;
+  let answered = false;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(url, { headers });
+      answered = true;
+      if (res.ok) return await res.text();
+      last = new Error(`HTTP ${res.status}`);
+      if (res.status < 500 && res.status !== 429) break;
+    } catch (e) {
+      last = new Error(`network error: ${e.cause?.code ?? e.message}`);
+    }
+    if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000));
+  }
+  if (!answered) unreachable = last;
+  throw last;
+}
+const raw = (repo, ref, path) => `${repo.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/${ref}/${path}`;
+
+if (driftRef) {
+  const label = `framework ${driftRef}`;
+  await checkAgainst((path) => get(raw(framework.repository, driftRef, path)), label);
+  // Anything new upstream needs a place on the mapping page (applied or rejected).
+  const api = framework.repository.replace('https://github.com/', 'https://api.github.com/repos/');
+  const auth = process.env.GITHUB_TOKEN ? { authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
+  for (const [dir, prefix] of [['docs/_mitigations', 'MI'], ['docs/_risks', 'RI']]) {
+    try {
+      const listing = JSON.parse(await get(`${api}/contents/${dir}?ref=${encodeURIComponent(driftRef)}`, { accept: 'application/vnd.github+json', ...auth }));
+      for (const file of listing) {
+        const m = new RegExp(`^${prefix.toLowerCase()}-(\\d+)_.*\\.md$`).exec(file.name);
+        if (!m) continue;
+        const id = `${prefix}-${m[1].padStart(2, '0')}`;
+        ok(id in ids, `${label}: ${id} (${dir}/${file.name}) is new and not accounted for on the mapping page`);
+        if (id in ids) ok(ids[id].path === `${dir}/${file.name}`, `${label}: ${id} has moved to ${dir}/${file.name}`);
+      }
+    } catch (e) {
+      fail(`${label}: cannot list ${dir} (${e.message})`);
+    }
+  }
+}
 if (doFetch) {
-  const get = async (url) => {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.text();
-  };
-  const raw = (repo, commit, path) => `${repo.replace('https://github.com/', 'https://raw.githubusercontent.com/')}/${commit}/${path}`;
   await checkAgainst((path) => get(raw(framework.repository, framework.commit, path)), 'fetch');
   try {
     checkCatalogue(await get(raw(catalogue.repository, catalogue.commit, catalogue.path)), 'fetch');
@@ -226,5 +307,5 @@ if (errors.length) {
   console.error(`\n${new Set(errors).size} problem(s).`);
   process.exit(1);
 }
-const mode = [sourceDir && 'local clone', doFetch && 'GitHub', catalogueArg && 'catalogue file'].filter(Boolean).join(' + ') || 'offline';
+const mode = [sourceDir && 'local clone', doFetch && 'GitHub', driftRef && `framework ${driftRef}`, catalogueArg && 'catalogue file'].filter(Boolean).join(' + ') || 'offline';
 console.log(`ok    ${checks} checks (${mode}): ${Object.keys(ids).length} framework ids, ${applied.size} applied, ${rejected.size} rejected, ${controlled.size} with CALM controls.`);

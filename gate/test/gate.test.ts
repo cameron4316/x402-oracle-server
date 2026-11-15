@@ -121,10 +121,10 @@ test('a degraded service fails the gate; advisory controls and missing evidence 
   assert.match(text, /Result: FAIL\. 4 of 6 controls not met \(1 advisory warning\)\./);
   const markdown = renderMarkdown(bundle);
   assert.match(markdown, /\| FAIL \| `employment` \|/);
-  assert.match(markdown, /availability >= 0\.99: 0\.9712/);
+  assert.match(markdown, /`availability >= 0\.99: 0\.9712`/);
 
   const metrics = renderMetrics(bundle);
-  assert.match(metrics, new RegExp(`reliability_gate_control_met\\{id="employment",target="${EMPLOYMENT.replace(/[.]/g, '\\.')}",enforcement="blocking"\\} 0`));
+  assert.equal(metrics.includes(`reliability_gate_control_met{id="employment",target="${EMPLOYMENT}",enforcement="blocking"} 0\n`), true);
   assert.match(metrics, /reliability_gate_control_met\{id="bureau",[^}]+\} 1/);
   assert.match(metrics, /reliability_gate_availability_ratio\{id="employment",[^}]+\} 0\.9712/);
   assert.match(metrics, /reliability_gate_latency_seconds\{id="employment",[^}]+quantile="0\.95"\} 2\.14/);

@@ -46,6 +46,16 @@ export interface EvaluationInput {
   now: Date;
 }
 
+/**
+ * Text taken from a document reaches a terminal and a pipeline summary before the document can be
+ * trusted. It is kept to one bounded, printable line, so a crafted value cannot repaint the
+ * terminal (escape sequences), reorder what is displayed (direction overrides) or flood the output.
+ */
+export function printable(value: string, max = 300): string {
+  const cleaned = value.replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g, '?');
+  return cleaned.length > max ? `${cleaned.slice(0, max)}...` : cleaned;
+}
+
 /** Tolerance for clocks that disagree slightly (document dated just ahead of the gate's clock). */
 const CLOCK_SKEW_MS = 5 * 60 * 1000;
 
@@ -98,7 +108,14 @@ export function evaluate(input: EvaluationInput): Evaluation {
 
   const finish = (): Evaluation => {
     const met = checks.every((c) => c.ok);
-    return { met, decision: met ? 'pass' : spec.enforcement === 'advisory' ? 'warn' : 'fail', checks, measurement, kid, keyStatus };
+    return {
+      met,
+      decision: met ? 'pass' : spec.enforcement === 'advisory' ? 'warn' : 'fail',
+      checks: checks.map((c) => ({ ...c, required: printable(c.required), actual: printable(c.actual) })),
+      measurement,
+      kid: kid === null ? null : printable(kid, 100),
+      keyStatus: keyStatus === null ? null : printable(keyStatus, 40),
+    };
   };
   const stop = (id: string, required: string, actual: string): Evaluation => {
     checks.push({ id, group: 'integrity', ok: false, required, actual });

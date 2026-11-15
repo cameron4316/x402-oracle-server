@@ -65,13 +65,25 @@ export function renderText(bundle: Bundle, verbose = false): string {
   return lines.join('\n');
 }
 
-const cell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+/**
+ * A value as a Markdown code span inside a table cell. Nothing in it is interpreted: no links,
+ * images, emphasis or HTML, whatever the text is. Backslashes are doubled before pipes are escaped,
+ * so every pipe is preceded by an odd number of backslashes and can never end the cell.
+ */
+function code(value: string): string {
+  const text = value
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/`/g, "'")
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|');
+  return text.trim().length === 0 ? '' : `\`${text}\``;
+}
 
 export function renderMarkdown(bundle: Bundle): string {
   const lines: string[] = [];
   lines.push('## Reliability gate');
   lines.push('');
-  lines.push(`**${resultLine(bundle).replace(/^Result: /, '')}** Evaluated ${bundle.evaluated_at}${bundle.clock === 'pinned' ? ' (clock pinned)' : ''} against \`${bundle.architecture.path}\`.`);
+  lines.push(`**${resultLine(bundle).replace(/^Result: /, '')}** Evaluated ${bundle.evaluated_at}${bundle.clock === 'pinned' ? ' (clock pinned)' : ''} against ${code(bundle.architecture.path)}.`);
   lines.push('');
   lines.push('| Result | Service | Target | Evidence | Not met |');
   lines.push('|---|---|---|---|---|');
@@ -80,9 +92,7 @@ export function renderMarkdown(bundle: Bundle): string {
       ...(record.config_errors ?? []).map((e) => `control is not valid: ${e}`),
       ...record.checks.filter((c) => !c.ok).map((c) => `${c.required}: ${c.actual}`),
     ];
-    lines.push(
-      `| ${LABEL[record.decision]} | \`${cell(record.id)}\` | ${cell(targetOf(record))} | ${cell(evidenceLine(record, true) ?? 'none')} | ${notMet.length ? cell(notMet.join('; ')) : ''} |`,
-    );
+    lines.push(`| ${LABEL[record.decision]} | ${code(record.id)} | ${code(targetOf(record))} | ${code(evidenceLine(record, true) ?? 'none')} | ${notMet.map(code).join('<br>')} |`);
   }
   lines.push('');
   lines.push(`Evidence digest (SHA-256): \`${bundle.digest.value}\``);

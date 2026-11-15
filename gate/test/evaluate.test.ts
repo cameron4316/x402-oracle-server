@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { evaluate, type Evaluation } from '../src/evaluate.ts';
+import { evaluate, printable, type Evaluation } from '../src/evaluate.ts';
 import { contractDoc, makeOracle, NOW, spec } from './helpers.ts';
 
 const oracle = makeOracle();
@@ -153,4 +153,30 @@ test("Hosannaith's committed report verifies against its committed public key, p
   const edited = structuredClone(report) as { endpoints: Array<{ score: number }> };
   (edited.endpoints[1] as { score: number }).score = 99;
   assert.deepEqual(failed(run(overrides, edited, keys)), ['signature']);
+});
+
+test('text from an unverified document cannot repaint a terminal or break out of a summary table', async () => {
+  const { renderMarkdown, renderText } = await import('../src/report.ts');
+  // The document claims to be about a "target" built to fake a PASS line and inject Markdown.
+  const hostile = 'https://evil.example/\u001b[2K\u001b[1A\rPASS    everything\n| PASS | `x` | ![beacon](https://evil.example/p.png) \\| \u202egnp.txt';
+  const result = evaluate({ spec: spec(), document: { ok: true, value: { target: hostile } }, keySet: { ok: true, value: oracle.keySet }, now: NOW });
+  assert.equal(result.decision, 'fail');
+  const actual = result.checks[0]!.actual;
+  assert.doesNotMatch(actual, /[\u0000-\u001f\u007f-\u009f\u202e]/);
+  assert.equal(printable('a'.repeat(1000)).length, 303);
+  assert.equal(printable('ok text 0.99 >= <b>'), 'ok text 0.99 >= <b>');
+
+  const bundle = {
+    type: 'reliability-gate.evidence', version: 1, gate: { name: 'reliability-gate', version: '0' }, evaluated_at: NOW.toISOString(), clock: 'system',
+    architecture: { path: 'a|b`c.json', sha256: '', name: null }, result: 'fail', summary: { controls: 1, pass: 0, fail: 1, warn: 0, invalid: 0 },
+    controls: [{ where: 'node', id: 'svc\\|x', name: null, control_key: 'k', requirement_index: 0, config: { target: 'https://t.example/|`' }, config_errors: null,
+      decision: 'fail', checks: result.checks, measurement: null, evidence: null, keys: null }],
+    digest: { alg: 'sha256', canonicalization: 'RFC 8785', value: 'x' },
+  } as unknown as Parameters<typeof renderMarkdown>[0];
+  const row = renderMarkdown(bundle).split('\n').find((line) => line.startsWith('| FAIL'))!;
+  // Split the way a Markdown table does: a pipe ends a cell unless an odd number of backslashes precede it.
+  const cells = row.match(/(?:\\.|[^\\|])*\|/g)!;
+  assert.equal(cells.length, 6, row);
+  assert.doesNotMatch(row.replace(/`[^`]*`/g, ''), /[!\[\]]/, 'Markdown syntax outside a code span');
+  assert.doesNotMatch(renderText(bundle), /[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u202e]/);
 });

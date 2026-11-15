@@ -1,7 +1,7 @@
 // Which targets Hosannaith will probe (src/checks/reliability/target-url.ts).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertTarget, checkTarget, MAX_TARGET_LENGTH, TargetRejectedError } from '../../src/checks/reliability/target-url.js';
+import { assertTarget, checkTarget, describeRefusedTargets, MAX_TARGET_LENGTH, TargetRejectedError } from '../../src/checks/reliability/target-url.js';
 
 const allowed = [
   'https://x402.goplausible.xyz/examples/weather',
@@ -75,4 +75,13 @@ test('non-strings and over-long URLs are refused', () => {
 test('assertTarget throws TargetRejectedError for a refused target', () => {
   assert.equal(assertTarget(' https://example.com/x '), 'https://example.com/x');
   assert.throws(() => assertTarget('http://127.0.0.1/'), (e: unknown) => e instanceof TargetRejectedError && /private/.test(e.reason));
+});
+
+test('describeRefusedTargets names what a batch may not contain, or returns null', () => {
+  assert.equal(describeRefusedTargets([]), null);
+  assert.equal(describeRefusedTargets(['https://a.example.com/x', 'https://b.example.com/y']), null);
+  const one = describeRefusedTargets(['https://a.example.com/x', 'http://10.0.0.1/x', 42]);
+  assert.match(one ?? '', /^2 target\(s\) not accepted: http:\/\/10\.0\.0\.1\/x \(target points at a private or reserved address\); 42 \(target must be a string\)\.$/);
+  const many = describeRefusedTargets(Array.from({ length: 8 }, (_, i) => `http://127.0.0.${i + 1}/`));
+  assert.match(many ?? '', /^8 target\(s\) not accepted: .*; and 3 more\.$/);
 });

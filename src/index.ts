@@ -11,7 +11,7 @@ import { CONFIG } from './config.js';
 import { routes } from './routes.config.js';
 import { getCheck } from './checks/registry.js';
 import { MAX_BATCH_TARGETS, reliabilityBatch } from './checks/reliability/batch.js';
-import { checkTarget } from './checks/reliability/target-url.js';
+import { checkTarget, describeRefusedTargets } from './checks/reliability/target-url.js';
 import { parseWindowHours, WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { PUBLISHED_SCHEMAS } from './contract/schema.js';
 import { buildOpenApi, type PaidRouteLike } from './contract/openapi.js';
@@ -20,6 +20,7 @@ import { loadKeyHistory, loadSigner, publishedKeySet } from './attest/keyset.js'
 import { attest, attestBatch } from './attest/sign.js';
 import { REPORT_ID_PATTERN } from './attest/report.js';
 import { securityTxt } from './security-txt.js';
+import { pinnedDispatcher } from './checks/reliability/pinned-fetch.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -73,7 +74,8 @@ app.get('/reliability', async (c, next) => {
 // Same for a batch, from a clone of the body (the handler still reads the original). Only bodies
 // with a declared length up to PRECHECK_MAX_BYTES are parsed before payment, so an unpaid caller
 // cannot make us parse arbitrarily large JSON; anything else goes on to the payment gate, and the
-// batch skips disallowed targets after payment.
+// paid handler applies the same rules. A 400 from the paid handler is never charged: the x402
+// middleware settles only responses below 400.
 const PRECHECK_MAX_BYTES = 256 * 1024;
 app.post('/reliability/batch', async (c, next) => {
   const length = Number(c.req.header('content-length') ?? NaN);
@@ -90,12 +92,8 @@ app.post('/reliability/batch', async (c, next) => {
     const window = parseWindowHours(windowHours);
     if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
     if (Array.isArray(targets)) {
-      const rejected = targets.map(checkTarget).filter((r) => !r.ok);
-      if (rejected.length > 0) {
-        const shown = rejected.slice(0, 5).map((r) => `${r.target} (${r.reason})`).join('; ');
-        const more = rejected.length > 5 ? `; and ${rejected.length - 5} more` : '';
-        return problemResponse(c, 400, `${rejected.length} target(s) not accepted: ${shown}${more}.`);
-      }
+      const refused = describeRefusedTargets(targets);
+      if (refused) return problemResponse(c, 400, refused);
     }
   }
   await next();
@@ -120,8 +118,9 @@ app.get('/reliability', async (c) => {
 });
 
 // --- Paid handler: batch reliability — score up to 50 endpoints in one call ---
-// Payment is gated by the middleware before this runs, so a 400 here only happens on a malformed
-// body from a client that already paid (the SDK always sends a well-formed body).
+// The middleware has verified the payment before this runs, but settles it only if this returns a
+// status below 400. So a 400 here (a malformed body, or targets we will not probe, in a request the
+// pre-payment check above did not get to read) costs the caller nothing.
 app.post('/reliability/batch', async (c) => {
   let body: unknown;
   try {
@@ -135,6 +134,9 @@ app.post('/reliability/batch', async (c) => {
   }
   const window = parseWindowHours((body as { windowHours?: unknown } | null)?.windowHours);
   if (!window.ok) return problemResponse(c, 400, `${window.reason}.`);
+  // Refuse rather than skip: nobody pays for a batch in which some targets were silently dropped.
+  const refused = describeRefusedTargets(targets);
+  if (refused) return problemResponse(c, 400, refused);
   const result = await reliabilityBatch(targets, window.hours);
   return c.json(signer ? attestBatch(signer, result) : result);
 });
@@ -438,6 +440,10 @@ app.get('/og-image.png', async (c) => {
   c.header('Cache-Control', 'public, max-age=86400');
   return c.body(ogImageCache.body);
 });
+
+// A first-time target is probed from this process, so refuse to start if probe connections cannot
+// be pinned to the addresses that were checked (checks/reliability/pinned-fetch.ts).
+await pinnedDispatcher();
 
 serve({ fetch: app.fetch, port: CONFIG.port }, () => {
   console.log(

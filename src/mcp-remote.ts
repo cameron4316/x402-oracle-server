@@ -24,6 +24,7 @@ import { INFO_TOOL_ANNOTATIONS, PAID_TOOL_ANNOTATIONS, targetUrl, windowHoursArg
 import { WINDOW_HOURS_ALLOWED } from './checks/reliability/window.js';
 import { AuditLog, PAYMENT_META_KEY, PAYMENT_RESPONSE_META_KEY, withAudit } from './mcp-audit.js';
 import { trimTrailingSlashes } from './trim.js';
+import { pinnedDispatcher } from './checks/reliability/pinned-fetch.js';
 
 // Same signing key and rules as the HTTP API (docs/attestation.md).
 const signer = loadSigner();
@@ -338,6 +339,10 @@ async function main(): Promise<void> {
       void server.close();
     }
   });
+
+  // A first-time target is probed from this process: refuse to start if probe connections cannot
+  // be pinned to the addresses that were checked (checks/reliability/pinned-fetch.ts).
+  await pinnedDispatcher();
 
   serve({ fetch: app.fetch, port: CONFIG.mcpRemotePort }, () => {
     console.log(

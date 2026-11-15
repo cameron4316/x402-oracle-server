@@ -104,6 +104,18 @@ export function checkTarget(raw: unknown): TargetCheck {
   return { ok: true, target };
 }
 
+/**
+ * One sentence naming the targets in a batch that will not be probed, or null if all are allowed.
+ * Used both before payment and by the paid handler, so the two can never disagree.
+ */
+export function describeRefusedTargets(targets: readonly unknown[]): string | null {
+  const refused = targets.map(checkTarget).filter((r): r is Extract<TargetCheck, { ok: false }> => !r.ok);
+  if (refused.length === 0) return null;
+  const shown = refused.slice(0, 5).map((r) => `${r.target} (${r.reason})`).join('; ');
+  const more = refused.length > 5 ? `; and ${refused.length - 5} more` : '';
+  return `${refused.length} target(s) not accepted: ${shown}${more}.`;
+}
+
 /** For callers that have already validated: throws if the target is not allowed. */
 export function assertTarget(raw: unknown): string {
   const r = checkTarget(raw);

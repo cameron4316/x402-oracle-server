@@ -151,8 +151,10 @@ logged.
 
 Targets must be public http(s) URLs. Private, loopback, link-local and reserved addresses, internal
 host names and URLs with credentials are refused before any payment, on the HTTP API and both MCP
-servers. When probing, every redirect hop is checked and host names are resolved first, so a public
-URL cannot redirect or resolve a probe into a private network.
+servers. When probing, every redirect hop is checked, host names are resolved first, and the
+connection can only go to the addresses that were checked, so a public URL cannot redirect or
+resolve a probe into a private network, even if its DNS answer changes a moment later. A batch that
+contains a refused target is rejected as a whole and never charged.
 
 ## Architecture and vision
 

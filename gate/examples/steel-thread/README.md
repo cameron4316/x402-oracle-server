@@ -44,8 +44,28 @@ The runner applies the overlay, starts the mock oracle, runs the gate, and write
 | `evidence.json` | The signed documents, keys, checks and decisions. |
 | `metrics.prom` | The same results as Prometheus metrics. |
 | `summary.md` | The table a pipeline shows. |
+| `mock-oracle-keys.json` | The mock oracle's public key, saved so the evidence can be audited after it stops. |
 
-Add `--scenario degraded` to see the pipeline fail. To validate the merged architecture:
+Add `--scenario degraded` to see the pipeline fail.
+
+**If your network cannot reach `api.hosannaith.com`**, the risk check control fails with "could not
+read", which is the gate refusing to pass without evidence. Two ways round it:
+
+- `--offline` reads the signed report and the public keys from this repository instead. The gate
+  trusts the signature, not the channel, so the decision is the same.
+- Behind a proxy, set `NODE_USE_ENV_PROXY=1` so Node's `fetch` uses the proxy settings in your
+  environment.
+
+To audit the evidence afterwards, with the controls and the keys confirmed:
+
+```bash
+node src/cli.ts audit examples/steel-thread/out/evidence.json \
+  --architecture examples/steel-thread/out/loan-approval.with-external-services.calm.json \
+  --trust-keys ../attest/jwks-history.json \
+  --trust-keys examples/steel-thread/out/mock-oracle-keys.json
+```
+
+To validate the merged architecture:
 
 ```bash
 npx @finos/calm-cli validate \
@@ -59,7 +79,7 @@ npx @finos/calm-cli validate \
 |---|---|---|
 | `credit-bureau-api` (fictional) | Mock oracle, proposed OpenEAGO contract | Pass |
 | `employment-verification-api` (fictional) | Mock oracle, proposed OpenEAGO contract | Pass; fail with `--scenario degraded` |
-| `counterparty-risk-check` (real endpoint) | Hosannaith's signed public report, fetched from its API and verified against its published key, key id pinned | Pass while the report is under 90 days old |
+| `counterparty-risk-check` (real endpoint) | Hosannaith's signed public report, fetched from its API (or read from this repository with `--offline`) and verified against its published key, key id pinned | Pass while the report is under 90 days old |
 | `openai-chat-api` (the Steel Thread's own node) | None configured | Advisory warning |
 
 The last row is the point of an advisory control. The framework names the availability of the

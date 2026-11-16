@@ -109,16 +109,28 @@ export function renderAudit(result: AuditResult): string {
         : c.key_confirmed
           ? ', signing key confirmed by the trusted key set'
           : ', SIGNING KEY NOT CONFIRMED by the trusted key set';
-    lines.push(
-      c.consistent
-        ? `ok  ${c.id}: recorded ${c.recorded}, and the signed evidence supports ${c.recomputed}${key}`
-        : `x   ${c.id}: recorded ${c.recorded}, but the signed evidence supports ${c.recomputed} (${c.reason})`,
-    );
+    if (!c.consistent) {
+      lines.push(`x   ${c.id}: recorded ${c.recorded}, but the signed evidence supports ${c.recomputed} (${c.reason})`);
+    } else if (c.settings_confirmed === false) {
+      lines.push(`x   ${c.id}: recorded ${c.recorded}, but under settings that are NOT the ones in the reviewed architecture`);
+    } else {
+      lines.push(`ok  ${c.id}: recorded ${c.recorded}, and the signed evidence supports ${c.recomputed}${key}`);
+    }
+  }
+  if (result.architecture === 'matches') lines.push('Controls: the same controls, with the same settings, as the reviewed architecture');
+  if (result.architecture === 'differs') lines.push('Controls: the file DIFFERS from the reviewed architecture');
+  if (result.evaluated_at) lines.push(`Run time: ${result.evaluated_at}, as stated by the file`);
+  if (result.architecture === 'not-checked' && result.controls.length > 0) {
+    lines.push('Note: the control settings were taken from the file itself. Pass --architecture <the reviewed CALM file> to confirm that no setting was changed and no control left out.');
   }
   if (!result.trusted_keys_supplied && result.controls.some((c) => c.kid)) {
     lines.push('Note: the signing keys were taken from the file itself. Pass --trust-keys <file or URL> to confirm them against a source you trust.');
   }
   lines.push('');
-  lines.push(result.ok ? 'Audit: OK. Every recorded decision is supported by the signed evidence in the file.' : `Audit: FAILED.\n${result.problems.map((p) => `  - ${p}`).join('\n')}`);
+  const confirmed = result.architecture === 'matches' && result.trusted_keys_supplied;
+  const okLine = confirmed
+    ? 'Audit: OK. Every decision is supported by the signed evidence, under the controls of the reviewed architecture and keys you supplied.'
+    : 'Audit: OK. Every recorded decision is supported by the signed evidence in the file. See the notes above for what was not confirmed.';
+  lines.push(result.ok ? okLine : `Audit: FAILED.\n${result.problems.map((p) => `  - ${p}`).join('\n')}`);
   return lines.join('\n');
 }

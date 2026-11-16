@@ -5,13 +5,17 @@
 // as received, the key set it was verified against, the measurement read from it, every check, and
 // the decision. `audit` re-runs the same evaluation from that file and compares.
 //
-// What the file proves on its own, and what it does not:
-//   - The oracle's signature inside it cannot be forged or altered without detection.
-//   - The digest detects accidental change to the rest of the file. It is not a signature: someone
-//     who rewrote the file could recompute it. The decisions are therefore always recomputed from
-//     the signed documents, never taken on trust from the file.
-//   - The key set in the file is the one the pipeline used. To rule out a substituted key set, an
-//     auditor passes the oracle's keys from a source they trust (`audit --trust-keys`).
+// What the file proves, and what an auditor has to bring:
+//   - The oracle's signature inside it cannot be forged or altered without detection, and every
+//     decision is recomputed from the signed documents, never taken on trust from the file.
+//   - The control settings are NOT signed by anyone. Someone could loosen a threshold in the file
+//     or drop a failing control from it and redo all that follows. So the auditor supplies the
+//     reviewed architecture (`audit --architecture`), and the file's controls must be exactly its.
+//   - The key set in the file is the one the pipeline used. To rule out a substituted key set, the
+//     auditor supplies the oracle's keys from a source they trust (`audit --trust-keys`).
+//   - The time of the run, and which signed document was presented, are the file's own statements.
+//     Nothing in the file can confirm them until the pipeline itself signs the file.
+//   - The digest detects accidental change. It is not a signature: a forger can recompute it.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -187,6 +191,8 @@ export interface AuditControl {
   kid: string | null;
   /** true/false when trusted keys were supplied and this control used a key; null otherwise. */
   key_confirmed: boolean | null;
+  /** true/false when the reviewed architecture was supplied: the settings in the file are the ones in it. */
+  settings_confirmed: boolean | null;
 }
 
 export interface AuditResult {
@@ -194,9 +200,26 @@ export interface AuditResult {
   digest_ok: boolean;
   result_ok: boolean;
   trusted_keys_supplied: boolean;
+  /**
+   * Whether the controls in the file are the ones in the reviewed architecture: the same file (by
+   * SHA-256), the same controls, the same settings, none missing. "not-checked" when no
+   * architecture was supplied.
+   */
+  architecture: 'matches' | 'differs' | 'not-checked';
+  /** When the file says the gate ran. Nothing inside the file can confirm this. */
+  evaluated_at: string | null;
   controls: AuditControl[];
   problems: string[];
 }
+
+/** The architecture document an auditor trusts, with the SHA-256 of the file's bytes. */
+export interface ReviewedArchitecture {
+  sha256: string;
+  document: unknown;
+}
+
+const placeOf = (c: { where: string; id: string; control_key: string; requirement_index: number }): string =>
+  JSON.stringify([c.where, c.id, c.control_key, c.requirement_index]);
 
 function isBundle(value: unknown): value is Bundle {
   const b = value as Partial<Bundle> | null;
@@ -215,13 +238,29 @@ function isBundle(value: unknown): value is Bundle {
 
 /**
  * Re-checks a saved evidence file. Every decision is recomputed from the signed documents inside
- * it, as of the time recorded in it. `trustedKeySets` are the oracle's keys from a source the
- * auditor trusts; when given, every key the file relied on must appear there, unrevoked.
+ * it, as of the time recorded in it.
+ *
+ * Two things in the file are not signed by anyone, so they are confirmed against sources the
+ * auditor supplies:
+ *   - `trustedKeySets`: the oracle's keys. Every key the file relied on must appear there, unrevoked.
+ *   - `reviewed`: the architecture the gate ran on. The file's controls must be exactly the
+ *     controls in it. Without this, someone could loosen a threshold in the file, or drop a failing
+ *     control from it, and redo everything that follows.
+ * The time of the run is the file's own statement and cannot be confirmed from the file.
  */
-export function auditBundle(value: unknown, trustedKeySets: unknown[] = []): AuditResult {
+export function auditBundle(value: unknown, trustedKeySets: unknown[] = [], reviewed: ReviewedArchitecture | null = null): AuditResult {
   const problems: string[] = [];
   if (!isBundle(value)) {
-    return { ok: false, digest_ok: false, result_ok: false, trusted_keys_supplied: trustedKeySets.length > 0, controls: [], problems: ['not a reliability-gate evidence file'] };
+    return {
+      ok: false,
+      digest_ok: false,
+      result_ok: false,
+      trusted_keys_supplied: trustedKeySets.length > 0,
+      architecture: reviewed ? 'differs' : 'not-checked',
+      evaluated_at: null,
+      controls: [],
+      problems: ['not a reliability-gate evidence file'],
+    };
   }
   const { digest, ...unsigned } = value;
   let digestOk = false;
@@ -236,13 +275,37 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = []): Aud
   if (trusted.some((t) => t === null)) problems.push('a trusted key set is not a JWKS-style object with a "keys" list');
   const now = new Date(value.evaluated_at);
 
+  // The controls of the reviewed architecture, by where they sit. Each must be matched by one record.
+  let expected: Map<string, { id: string; config: unknown }> | null = null;
+  let architectureOk = true;
+  if (reviewed) {
+    if (reviewed.sha256 !== value.architecture?.sha256) {
+      architectureOk = false;
+      problems.push('the architecture supplied is not the file the gate ran on (its SHA-256 differs from the one recorded)');
+    }
+    try {
+      expected = new Map(
+        findControls(reviewed.document).map((c) => [
+          placeOf({ where: c.where, id: c.id, control_key: c.controlKey, requirement_index: c.requirementIndex }),
+          { id: c.id, config: c.config },
+        ]),
+      );
+    } catch {
+      expected = new Map();
+      architectureOk = false;
+      problems.push('the architecture supplied is not a CALM architecture document');
+    }
+  }
+  const seen = new Set<string>();
+
   const controls = value.controls.map((record, index): AuditControl => {
     try {
       return auditControl(record);
     } catch {
       // The file is untrusted input: a record this code cannot even read is a finding.
       problems.push(`control ${index + 1}: the record is malformed`);
-      return { id: `control ${index + 1}`, control_key: '', recorded: 'invalid', recomputed: 'invalid', consistent: false, reason: 'the record is malformed', kid: null, key_confirmed: null };
+      architectureOk = false;
+      return { id: `control ${index + 1}`, control_key: '', recorded: 'invalid', recomputed: 'invalid', consistent: false, reason: 'the record is malformed', kid: null, key_confirmed: null, settings_confirmed: expected ? false : null };
     }
   });
 
@@ -285,12 +348,43 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = []): Aud
       );
       if (!keyConfirmed) problems.push(`${record.id}: key ${kid} is not in the trusted key set (or is revoked there)`);
     }
-    return { id: record.id, control_key: record.control_key, recorded: record.decision, recomputed, consistent, reason, kid, key_confirmed: keyConfirmed };
+
+    let settingsConfirmed: boolean | null = null;
+    if (expected) {
+      const place = placeOf(record);
+      const inArchitecture = expected.get(place);
+      if (!inArchitecture || seen.has(place)) {
+        settingsConfirmed = false;
+        problems.push(`${record.id}: no such control in the reviewed architecture`);
+      } else {
+        seen.add(place);
+        settingsConfirmed = canonicalSha256(record.config ?? null) === canonicalSha256(inArchitecture.config ?? null);
+        if (!settingsConfirmed) problems.push(`${record.id}: the control's settings in the file differ from the reviewed architecture`);
+      }
+      if (!settingsConfirmed) architectureOk = false;
+    }
+    return { id: record.id, control_key: record.control_key, recorded: record.decision, recomputed, consistent, reason, kid, key_confirmed: keyConfirmed, settings_confirmed: settingsConfirmed };
   }
 
-  const expected = controls.some((c) => c.recomputed === 'fail' || c.recomputed === 'invalid') ? 'fail' : 'pass';
-  const resultOk = value.result === expected;
-  if (!resultOk) problems.push(`the file's overall result is "${value.result}", but its evidence supports "${expected}"`);
+  // A failing control left out of the file is as much a forgery as an edited one.
+  for (const [place, control] of expected ?? []) {
+    if (seen.has(place)) continue;
+    architectureOk = false;
+    problems.push(`the reviewed architecture has a control on ${control.id} that the file has no record of`);
+  }
 
-  return { ok: problems.length === 0, digest_ok: digestOk, result_ok: resultOk, trusted_keys_supplied: trustedKeySets.length > 0, controls, problems };
+  const supported = controls.some((c) => c.recomputed === 'fail' || c.recomputed === 'invalid') ? 'fail' : 'pass';
+  const resultOk = value.result === supported;
+  if (!resultOk) problems.push(`the file's overall result is "${value.result}", but its evidence supports "${supported}"`);
+
+  return {
+    ok: problems.length === 0,
+    digest_ok: digestOk,
+    result_ok: resultOk,
+    trusted_keys_supplied: trustedKeySets.length > 0,
+    architecture: !reviewed ? 'not-checked' : architectureOk ? 'matches' : 'differs',
+    evaluated_at: value.evaluated_at,
+    controls,
+    problems,
+  };
 }

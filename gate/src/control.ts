@@ -131,6 +131,12 @@ export function parseControlConfig(config: unknown): ParsedControl {
     }
   }
 
+  // The Hosannaith formats do not name their issuer, so "oracle" could not be checked for them.
+  // A setting that looks like a check and is not one is refused; the key pin does that job.
+  if (oracle !== undefined && evidence !== null && evidence.format !== 'openeago-contract') {
+    errors.push(`oracle cannot be checked for ${evidence.format} documents, which do not name their issuer: remove it and pin the signing key with evidence.trusted-kids`);
+  }
+
   const windowHours = config['window-hours'] ?? 168;
   if (typeof windowHours !== 'number' || !Number.isInteger(windowHours) || windowHours < 1) {
     errors.push('window-hours must be a whole number of hours, 1 or more');

@@ -3,14 +3,16 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, startMockOracle, type MockOracle } from '../mock-oracle/server.ts';
 import { canonicalize } from '../src/attest/jcs.ts';
-import { auditBundle, runGate, type Bundle } from '../src/evidence.ts';
+import { parseControlConfig } from '../src/control.ts';
+import { evaluate } from '../src/evaluate.ts';
+import { auditBundle, runGate, sha256Hex, type Bundle } from '../src/evidence.ts';
 import { renderMetrics } from '../src/metrics.ts';
 import { renderMarkdown, renderText } from '../src/report.ts';
 import { controlConfig } from './helpers.ts';
@@ -197,6 +199,95 @@ test('editing a saved evidence file is caught, even when its digest is recompute
   assert.equal(mangled.ok, false);
   assert.equal(mangled.controls.length, 3);
   assert.match(mangled.problems.join('\n'), /control 1: the record is malformed/);
+});
+
+/** What a careful insider does: change a control's settings in the file, then redo everything that follows from them. */
+function forgeSettings(bundle: Bundle, id: string, change: (config: Record<string, unknown>) => void): Bundle {
+  const forged = structuredClone(bundle);
+  const record = forged.controls.find((c) => c.id === id)!;
+  change(record.config as Record<string, unknown>);
+  const parsed = parseControlConfig(record.config);
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return forged;
+  const result = evaluate({
+    spec: parsed.spec,
+    document: { ok: true, value: record.evidence!.document },
+    keySet: { ok: true, value: record.keys!.key_set },
+    now: new Date(forged.evaluated_at),
+  });
+  Object.assign(record, { decision: result.decision, checks: result.checks, measurement: result.measurement });
+  const count = (d: string): number => forged.controls.filter((c) => c.decision === d).length;
+  forged.summary = { controls: forged.controls.length, pass: count('pass'), fail: count('fail'), warn: count('warn'), invalid: count('invalid') };
+  forged.result = forged.summary.fail + forged.summary.invalid > 0 ? 'fail' : 'pass';
+  return reDigest(forged);
+}
+
+test('editing the control settings in an evidence file is caught against the reviewed architecture', async () => {
+  oracle.setScenario(loadScenario('degraded'));
+  const architecture = writeArchitecture('settings.json', [node('bureau', mockControl(BUREAU)), node('employment', mockControl(EMPLOYMENT))]);
+  const bundle = await runGate(architecture, { now: new Date(), clock: 'system' });
+  assert.equal(bundle.result, 'fail');
+  const bytes = readFileSync(architecture);
+  const reviewed = { sha256: sha256Hex(bytes), document: JSON.parse(bytes.toString('utf8')) };
+
+  // The honest file is confirmed against the architecture it was produced from.
+  const honest = auditBundle(bundle, [], reviewed);
+  assert.equal(honest.ok, true, honest.problems.join('; '));
+  assert.equal(honest.architecture, 'matches');
+  assert.equal(honest.controls.every((c) => c.settings_confirmed === true), true);
+
+  const forgeries: Array<[string, Bundle, RegExp]> = [
+    ['loosened thresholds', forgeSettings(bundle, 'employment', (c) => { c['thresholds'] = { 'min-availability': 0.5 }; }), /employment: the control's settings in the file differ/],
+    ['blocking turned advisory', forgeSettings(bundle, 'employment', (c) => { c['enforcement'] = 'advisory'; }), /employment: the control's settings in the file differ/],
+    ['observation floor lowered', forgeSettings(bundle, 'bureau', (c) => { c['min-observations'] = 1; }), /bureau: the control's settings in the file differ/],
+  ];
+  for (const [name, forged, message] of forgeries) {
+    // On its own the file is self-consistent: this is exactly what the note in the output warns about.
+    const alone = auditBundle(forged);
+    assert.equal(alone.ok, true, name);
+    assert.equal(alone.architecture, 'not-checked', name);
+    // Against the reviewed architecture it is caught.
+    const checked = auditBundle(forged, [], reviewed);
+    assert.equal(checked.ok, false, name);
+    assert.equal(checked.architecture, 'differs', name);
+    assert.match(checked.problems.join('\n'), message, name);
+  }
+  assert.equal(forgeries[0]![1].result, 'pass');
+  assert.equal(forgeries[1]![1].result, 'pass');
+
+  // Dropping the failing control from the file altogether.
+  const dropped = structuredClone(bundle);
+  dropped.controls = dropped.controls.filter((c) => c.id !== 'employment');
+  dropped.summary = { controls: 1, pass: 1, fail: 0, warn: 0, invalid: 0 };
+  dropped.result = 'pass';
+  assert.equal(auditBundle(reDigest(dropped)).ok, true);
+  const droppedChecked = auditBundle(reDigest(dropped), [], reviewed);
+  assert.equal(droppedChecked.ok, false);
+  assert.match(droppedChecked.problems.join('\n'), /the reviewed architecture has a control on employment that the file has no record of/);
+
+  // A record for a control the architecture does not have.
+  const invented = structuredClone(bundle);
+  invented.controls[0]!.id = 'somewhere-else';
+  assert.match(auditBundle(reDigest(invented), [], reviewed).problems.join('\n'), /somewhere-else: no such control in the reviewed architecture/);
+
+  // An architecture that is not the file the gate ran on, even if its controls are the same.
+  const other = { sha256: sha256Hex('something else'), document: reviewed.document };
+  const wrongFile = auditBundle(bundle, [], other);
+  assert.equal(wrongFile.ok, false);
+  assert.match(wrongFile.problems.join('\n'), /is not the file the gate ran on/);
+  assert.equal(auditBundle(bundle, [], { sha256: reviewed.sha256, document: 'nope' }).ok, false);
+
+  // The same through the command line.
+  const evidence = join(dir, 'out', 'settings-forged.json');
+  mkdirSync(join(dir, 'out'), { recursive: true });
+  writeFileSync(evidence, JSON.stringify(forgeries[0]![1], null, 2));
+  const withoutArchitecture = await cli(['audit', evidence]);
+  assert.equal(withoutArchitecture.code, 0);
+  assert.match(withoutArchitecture.stdout, /Pass --architecture/);
+  const withArchitecture = await cli(['audit', evidence, '--architecture', architecture]);
+  assert.equal(withArchitecture.code, 1);
+  assert.match(withArchitecture.stdout, /DIFFERS from the reviewed architecture/);
+  assert.equal((await cli(['audit', evidence, '--architecture', join(dir, 'missing.json')])).code, 2);
 });
 
 test('the command line: exit codes, files written, and the audit command', async () => {

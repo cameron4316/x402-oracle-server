@@ -4,12 +4,13 @@
 //
 //   git clone https://github.com/finos-hack/ai-steel-thread-demo
 //   git -C ai-steel-thread-demo checkout <commit named in overlay.json>
-//   node examples/steel-thread/run.ts --steel-thread ./ai-steel-thread-demo [--no-mock-oracle] [--skip-gate]
+//   node examples/steel-thread/run.ts --steel-thread ./ai-steel-thread-demo [--offline] [--scenario degraded]
 //
 // Writes, under examples/steel-thread/out/:
 //   loan-approval.with-external-services.calm.json   the merged architecture
 //   url-to-local-file-mapping.json                   the Steel Thread's control schemas plus this one
 //   evidence.json, metrics.prom, summary.md          what the gate found
+//   mock-oracle-keys.json                            the mock oracle's public key, for the audit
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -17,6 +18,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { loadScenario, startMockOracle } from '../../mock-oracle/server.ts';
+import { findControls } from '../../src/calm.ts';
 import { applyOverlay } from '../../src/overlay.ts';
 
 const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
@@ -26,6 +28,7 @@ const { values } = parseArgs({
     scenario: { type: 'string', default: 'healthy' },
     'no-mock-oracle': { type: 'boolean', default: false },
     'skip-gate': { type: 'boolean', default: false },
+    offline: { type: 'boolean', default: false },
   },
 });
 
@@ -58,6 +61,28 @@ if (sha256 !== overlay.base.sha256) {
 const out = here('./out/');
 mkdirSync(out, { recursive: true });
 const merged = applyOverlay(JSON.parse(baseBytes.toString('utf8')), overlay);
+
+// --offline: read Hosannaith's signed report and public keys from this repository instead of its
+// API, for networks that cannot reach it. The gate trusts the signature, not the channel, so the
+// decision is the same; only where the bytes come from changes.
+if (values.offline) {
+  const API = 'https://api.hosannaith.com';
+  const local = (path: string): string => relative(out, here(`../../../${path}`)).split('\\').join('/');
+  let switched = 0;
+  for (const control of findControls(merged)) {
+    const evidence = (control.config as { evidence?: { format?: string; from?: string; keys?: string } }).evidence;
+    const report = evidence?.from?.startsWith(`${API}/reports/`) ? evidence.from.slice(API.length + 1).replace(/^reports\//, 'public-reports/') : null;
+    if (!evidence || report === null) continue;
+    if (!existsSync(here(`../../../${report}`))) {
+      console.error(`--offline: ${report} is not in this repository.`);
+      process.exit(2);
+    }
+    evidence.from = local(report);
+    evidence.keys = local('attest/jwks-history.json');
+    switched++;
+  }
+  console.log(`Offline: ${switched} control(s) read Hosannaith's signed report and keys from this repository.`);
+}
 const mergedPath = join(out, 'loan-approval.with-external-services.calm.json');
 writeFileSync(mergedPath, JSON.stringify(merged, null, 2) + '\n');
 
@@ -87,5 +112,11 @@ const code = await new Promise<number>((done) => {
   args.push('--evidence-out', rel(join(out, 'evidence.json')), '--metrics-out', rel(join(out, 'metrics.prom')), '--summary-out', rel(join(out, 'summary.md')));
   spawn(process.execPath, args, { stdio: 'inherit' }).on('exit', (status) => done(status ?? 2));
 });
+// The mock oracle's key exists only while it runs. Its public half is saved so the evidence can be
+// audited afterwards with the key confirmed. (A real oracle's keys come from the oracle, not from here.)
+if (oracle) {
+  const keys = await (await fetch(`${oracle.url}/.well-known/keys.json`)).json();
+  writeFileSync(join(out, 'mock-oracle-keys.json'), JSON.stringify(keys, null, 2) + '\n');
+}
 await oracle?.close();
 process.exitCode = code;

@@ -60,6 +60,11 @@ test('other invalid values are each reported', () => {
   assert.match(errorsOf(controlConfig({ evidence: { format: 'openeago-contract', from: 'a', keys: 'b', 'trusted-kids': [] } })).join('\n'), /trusted-kids/);
   assert.match(errorsOf(controlConfig({ thresholds: { 'max-latency-p95-ms': 0 } })).join('\n'), /greater than 0/);
   assert.deepEqual(errorsOf('nope'), ['config must be an object']);
+  // An issuer that could not be checked is refused instead of being silently ignored.
+  for (const format of ['hosannaith-report', 'hosannaith-result']) {
+    assert.match(errorsOf(controlConfig({ evidence: { format, from: 'a', keys: 'b' } })).join('\n'), /oracle cannot be checked/);
+    assert.deepEqual(errorsOf(controlConfig({ oracle: undefined, evidence: { format, from: 'a', keys: 'b' } })), []);
+  }
 });
 
 test('the JSON Schema and the parser describe the same control', () => {
@@ -79,4 +84,17 @@ test('the JSON Schema and the parser describe the same control', () => {
     if (key === 'name' || key === 'description') continue; // CALM's own members; they carry no policy
     assert.notEqual(errorsOf(rest).length, 0, `the parser accepts a control without "${key}"`);
   }
+});
+
+test('a read error is reported with a reason a person can act on', async () => {
+  const { reasonOf } = await import('../src/sources.ts');
+  assert.equal(reasonOf(Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('getaddrinfo ENOTFOUND x'), { code: 'ENOTFOUND' }) })), 'ENOTFOUND');
+  // A numeric code (as some proxy failures carry) is not a reason: the message is.
+  const proxy = Object.assign(new Error('Proxy response (403) !== 200 when HTTP Tunneling'), { code: 'UND_ERR_ABORTED' });
+  const cancelled = Object.assign(new Error('Request was cancelled.'), { code: 0, cause: proxy });
+  assert.equal(reasonOf(Object.assign(new TypeError('fetch failed'), { cause: cancelled })), 'Proxy response (403) !== 200 when HTTP Tunneling');
+  assert.equal(reasonOf(Object.assign(new Error('The operation was aborted due to timeout'), { code: 23 })), 'The operation was aborted due to timeout');
+  assert.equal(reasonOf(new Error('plain')), 'plain');
+  assert.equal(reasonOf(Object.assign(new Error('missing'), { code: 'ENOENT' })), 'ENOENT');
+  assert.equal(reasonOf(undefined), 'unknown error');
 });

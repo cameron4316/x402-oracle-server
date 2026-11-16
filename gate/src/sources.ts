@@ -21,6 +21,23 @@ export function describeRef(ref: string, baseDir: string): string {
   return isUrl(ref) ? ref : isAbsolute(ref) ? ref : resolve(baseDir, ref);
 }
 
+/**
+ * Why a read failed, in words a person can act on. Errors arrive wrapped ("fetch failed" around the
+ * real cause), so the innermost one is used: its system code when it has one (ENOTFOUND, ENOENT,
+ * which also keeps file paths out of the evidence), otherwise its message. Never a bare number.
+ */
+export function reasonOf(err: unknown): string {
+  const seen = new Set<unknown>();
+  let innermost: { code?: unknown; message?: unknown } | undefined;
+  for (let e = err as { code?: unknown; message?: unknown; cause?: unknown } | undefined; e && typeof e === 'object' && !seen.has(e); e = e.cause as typeof e) {
+    seen.add(e);
+    innermost = e;
+  }
+  if (!innermost) return 'unknown error';
+  if (typeof innermost.code === 'string' && /^E[A-Z0-9_]+$/.test(innermost.code)) return innermost.code;
+  return typeof innermost.message === 'string' && innermost.message.length > 0 ? innermost.message : 'unknown error';
+}
+
 export async function loadJson(ref: string, baseDir: string): Promise<Loaded> {
   let text: string;
   try {
@@ -41,9 +58,7 @@ export async function loadJson(ref: string, baseDir: string): Promise<Loaded> {
       text = await readFile(describeRef(ref, baseDir), 'utf8');
     }
   } catch (err) {
-    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
-    const why = cause?.code ?? cause?.message ?? (err as Error).message;
-    return { ok: false, error: `could not read ${ref} (${why})` };
+    return { ok: false, error: `could not read ${ref} (${reasonOf(err)})` };
   }
   if (text.length > MAX_BYTES) return { ok: false, error: `${ref} is larger than ${MAX_BYTES} bytes` };
   let value: unknown;

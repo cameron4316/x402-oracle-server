@@ -156,7 +156,6 @@
                 "description": "The pay-per-call risk check must be shown to be reliable, and to demand payment correctly, by a signed report no more than 90 days old.",
                 "aigf-catalog-url": "https://air-governance-framework.finos.org/mitigations/mi-4_ai-system-observability.html",
                 "target": "https://a-identity.xyz/api/x402/algorand/tools/risk_check",
-                "oracle": "https://api.hosannaith.com",
                 "evidence": {
                   "format": "hosannaith-report",
                   "from": "https://api.hosannaith.com/reports/a-identity-2026-11.json",

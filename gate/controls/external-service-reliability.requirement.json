@@ -45,7 +45,7 @@
     "oracle": {
       "type": "string",
       "minLength": 1,
-      "description": "Expected issuer of the evidence. Compared with the document when the document names its oracle."
+      "description": "Expected issuer of the evidence, compared with the issuer the document names. Only for the openeago-contract format; the Hosannaith formats name no issuer, so pin the signing key with evidence.trusted-kids instead."
     },
     "evidence": {
       "type": "object",

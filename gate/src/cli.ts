@@ -11,7 +11,7 @@ import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { findControls } from './calm.ts';
 import { parseControlConfig } from './control.ts';
-import { auditBundle, runGate } from './evidence.ts';
+import { auditBundle, runGate, sha256Hex, type ReviewedArchitecture } from './evidence.ts';
 import { renderMetrics } from './metrics.ts';
 import { applyOverlay } from './overlay.ts';
 import { renderAudit, renderMarkdown, renderText } from './report.ts';
@@ -30,7 +30,10 @@ Usage:
       --verbose, -v           list every check, also for controls that are met
       --allow-empty           do not treat "no controls found" as an error
 
-  reliability-gate audit <evidence.json> [--trust-keys <file or URL>]... [--format text|json]
+  reliability-gate audit <evidence.json> [options]
+      --architecture <file>   the reviewed CALM file: confirms no control setting was changed or left out
+      --trust-keys <file|URL> the oracle's keys from a source you trust (repeat for each oracle)
+      --format text|json
   reliability-gate controls --architecture <calm.json>
   reliability-gate overlay --base <calm.json> --overlay <overlay.json> --out <merged.json>
 
@@ -114,7 +117,7 @@ async function audit(args: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args,
     allowPositionals: true,
-    options: { 'trust-keys': { type: 'string', multiple: true }, format: { type: 'string', default: 'text' } },
+    options: { 'trust-keys': { type: 'string', multiple: true }, architecture: { type: 'string', short: 'a' }, format: { type: 'string', default: 'text' } },
   });
   const file = positionals[0];
   if (!file || positionals.length > 1) throw new UsageError('audit takes one evidence file');
@@ -126,7 +129,23 @@ async function audit(args: string[]): Promise<number> {
     if (!loaded.ok) throw new UsageError(`--trust-keys: ${loaded.error}`);
     trusted.push(loaded.value);
   }
-  const result = auditBundle(bundle, trusted);
+  let reviewed: ReviewedArchitecture | null = null;
+  if (values.architecture) {
+    let bytes: Buffer;
+    try {
+      bytes = await readFile(values.architecture);
+    } catch (err) {
+      throw new UsageError(`--architecture: cannot read ${values.architecture} (${(err as NodeJS.ErrnoException).code ?? (err as Error).message})`);
+    }
+    let document: unknown;
+    try {
+      document = JSON.parse(bytes.toString('utf8'));
+    } catch {
+      throw new UsageError(`--architecture: ${values.architecture} is not valid JSON`);
+    }
+    reviewed = { sha256: sha256Hex(bytes), document };
+  }
+  const result = auditBundle(bundle, trusted, reviewed);
   console.log(values.format === 'json' ? JSON.stringify(result, null, 2) : renderAudit(result));
   return result.ok ? 0 : 1;
 }

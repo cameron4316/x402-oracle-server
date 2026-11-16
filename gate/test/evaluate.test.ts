@@ -139,7 +139,7 @@ test("Hosannaith's committed report verifies against its committed public key, p
   const keys = read('../../attest/jwks-history.json');
   const overrides = {
     target: 'https://a-identity.xyz/api/x402/algorand/tools/risk_check',
-    oracle: 'https://api.hosannaith.com',
+    oracle: undefined,
     evidence: { format: 'hosannaith-report', from: 'r.json', keys: 'k.json', 'trusted-kids': ['tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k'] },
     thresholds: { 'min-reliability-score': 0.95, 'min-availability': 0.99, 'max-error-rate': 0.05, 'max-latency-p95-ms': 1500, 'min-protocol-conformance': 1 },
     'max-evidence-age-hours': 744,

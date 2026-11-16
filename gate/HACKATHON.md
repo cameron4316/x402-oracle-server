@@ -27,8 +27,9 @@ One control and the tooling to prove it.
 - **A gate** that checks the control on every pipeline run against evidence **signed by an
   independent oracle**, and fails the pipeline when a service falls short.
 - **An evidence file** holding the signed documents, keys, checks and decisions, and an **audit**
-  command that recomputes every decision from it offline. Editing the file is caught, even by
-  someone careful enough to recompute its digest.
+  command that recomputes every decision from it offline. Edited numbers are caught by the oracle's
+  signature. Loosened settings or a dropped control are caught against the reviewed architecture.
+  Recomputing the file's digest does not help a forger in either case.
 - **An overlay** that applies all of this to the Steel Thread's architecture at a pinned commit,
   without editing or copying its files.
 - **A working example of the OpenEAGO reliability-oracle proposal**
@@ -46,8 +47,8 @@ cd x402-oracle-server/gate
 node demo/demo.ts
 ```
 
-Four steps: a passing pipeline, an offline audit, a service that degrades and fails the pipeline,
-and a forged evidence file that the audit rejects. On the Steel Thread's own architecture:
+Five steps: a passing pipeline, an offline audit, a service that degrades and fails the pipeline,
+and two forged evidence files that the audit rejects (edited numbers, then a loosened rule). On the Steel Thread's own architecture:
 [examples/steel-thread/](examples/steel-thread/README.md). Everything else: [README.md](README.md).
 
 ## How it uses FINOS projects
@@ -77,7 +78,7 @@ The README lists exactly what is real and what is not.
 2. Offer the contract, the mock oracle and the adapter to OpenEAGO as `examples/reliability-oracle`.
 3. Propose to the AI Governance Framework a risk for the availability of outside services an
    agent depends on or pays, which the framework does not name today.
-4. Sign the evidence file as the pipeline that produced it.
+4. Sign the evidence file as the pipeline that produced it, so the time of the run is attested too.
 5. Oracles for ordinary APIs and MCP servers, through the same contract.
 
 Built by Cameron Vickers, with Claude Code as pair programmer.

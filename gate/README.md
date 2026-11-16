@@ -25,12 +25,13 @@ cd x402-oracle-server/gate
 node demo/demo.ts
 ```
 
-The demo runs four steps and prints each command it uses:
+The demo runs five steps and prints each command it uses:
 
 1. **A good day.** Four outside services are checked. The pipeline passes.
 2. **An audit.** The saved evidence file is re-checked offline. Every decision is recomputed.
 3. **One service degrades.** The same command now fails the pipeline, with the reasons.
-4. **Someone edits the evidence to hide it.** The audit catches it.
+4. **Someone edits the numbers to hide it.** The oracle's signature no longer verifies.
+5. **Someone loosens the rule instead.** The file no longer matches the reviewed architecture.
 
 Step 3 looks like this:
 
@@ -111,7 +112,7 @@ reliability, availability and error rate, as quoted in the proposal linked
 | `evidence.from` | Where the signed document is read from: a URL or a file. |
 | `evidence.keys` | The oracle's public keys: a URL or a file. This is the trust anchor. |
 | `evidence.trusted-kids` | Optional. Only these key ids are accepted. |
-| `oracle` | The issuer the evidence must name, when the format names one. |
+| `oracle` | The issuer the evidence must name. Only for `openeago-contract`. The Hosannaith formats name no issuer, so `oracle` is refused there: pin the key with `trusted-kids` instead. |
 | `window-hours` | The evidence must cover at least this long. Default 168. |
 | `thresholds` | What the service must meet. Fractions run from 0 to 1. |
 | `min-confidence` | `history` (default), `one-shot` or `pending`. |
@@ -152,23 +153,27 @@ the signed document exactly as received, the key set it was verified against, ev
 decision.
 
 ```bash
-node src/cli.ts audit evidence.json --trust-keys ../attest/jwks-history.json
+node src/cli.ts audit evidence.json \
+  --architecture architecture.calm.json \
+  --trust-keys ../attest/jwks-history.json
 ```
 
 `audit` recomputes every decision from the signed documents in the file, as of the time recorded
 in it, and compares. It needs no network.
 
-What the file proves, and what it does not:
+Only the oracle's documents are signed. Everything else in the file is confirmed against something
+the auditor brings:
 
-- **The oracle's figures cannot be changed.** Any edit to a signed document breaks its signature,
-  and the recomputed decision becomes "fail".
-- **The recorded decisions are never taken on trust.** They are recomputed, so flipping "fail" to
-  "pass" is caught even when the file's digest has been recomputed to match.
-- **The digest is not a signature.** It detects accidental change. The gate does not yet sign the
-  file as the pipeline that produced it.
-- **The key set in the file is the one the pipeline used.** To rule out a swapped key set, pass
-  the oracle's keys from a source you trust with `--trust-keys`. Every key the file relied on must
-  then appear there, unrevoked.
+| In the file | Protected by |
+|---|---|
+| The oracle's figures | The oracle's signature. Any edit breaks it, and the recomputed decision becomes "fail". |
+| The decisions and checks | Recomputed every time, never read from the file. Flipping "fail" to "pass" is caught even when the file's digest was recomputed. |
+| The control settings, and which controls there are | `--architecture`: the reviewed CALM file. The file must be the one the gate ran on (by SHA-256), every control's settings must be identical, and none may be missing. Without it, someone could loosen a threshold in the file, or drop a failing control, and redo everything that follows. |
+| The signing keys | `--trust-keys`: the oracle's keys from a source you trust. Every key the file relied on must appear there, unrevoked. |
+| The time of the run, and which signed document was presented | Nothing yet. They are the file's own statements. A document dated after the stated run time is refused, but an older genuine document could be presented as the latest. Closing this needs the pipeline to sign the file, which the gate does not do yet. |
+
+Without `--architecture` or `--trust-keys` the audit still runs, and says which of the two it could
+not confirm. The digest in the file detects accidental change; it is not a signature.
 
 ## Where the evidence comes from
 
@@ -216,6 +221,9 @@ git -C ai-steel-thread-demo checkout 2782173d47f5074f8767dbdf553fa9165ee1ccd8
 node examples/steel-thread/run.ts --steel-thread ./ai-steel-thread-demo
 ```
 
+Add `--offline` on a network that cannot reach Hosannaith's API: the signed report and keys are
+then read from this repository, and the decision is the same.
+
 CI does the same on every change: applies the overlay, validates the merged architecture with
 the official CALM CLI, and runs the gate on it.
 
@@ -246,7 +254,7 @@ Other commands:
 
 ```bash
 node src/cli.ts check --architecture <calm.json> [--evidence-out f] [--metrics-out f] [--verbose]
-node src/cli.ts audit <evidence.json> [--trust-keys <file or URL>]...
+node src/cli.ts audit <evidence.json> [--architecture <calm.json>] [--trust-keys <file or URL>]...
 node src/cli.ts controls --architecture <calm.json>      # list the controls, check nothing
 node src/cli.ts overlay --base <calm.json> --overlay <overlay.json> --out <merged.json>
 ```
@@ -298,11 +306,14 @@ the framework says so.
 - **Hosannaith measures pay-per-call (x402) endpoints today.** It does not measure ordinary APIs,
   MCP servers or model APIs, which is why those services in the examples are fictional or carry
   no evidence. An oracle for them would plug in through the same contract.
-- **Dates are the oracle's.** Freshness uses the times the oracle signed. A key retired or revoked
-  in the key set is refused; an oracle that lies about the time is not detected.
+- **Dates are the oracle's.** Freshness uses the times the oracle signed. A revoked key is refused.
+  A retired key is accepted only for documents dated while it was in use. An oracle that lies
+  about the time is not detected.
 - **Build time, not run time.** The gate stops a pipeline. It does not sit in the path of the
   agent's calls. The metrics output is the bridge to run-time dashboards and alerts.
-- **The evidence file is not signed by the pipeline.** See [the audit section](#the-evidence-file-and-the-audit).
+- **The evidence file is not signed by the pipeline.** Its settings are confirmed against the
+  reviewed architecture and its keys against a trusted key set, but the time of the run is its own
+  statement. See [the audit section](#the-evidence-file-and-the-audit).
 - **Behind a proxy**, Node's `fetch` needs `NODE_USE_ENV_PROXY=1` to use the proxy settings in the
   environment. Reading evidence from files avoids the network altogether.
 
@@ -323,8 +334,8 @@ node --test "test/*.test.ts"
 ```
 
 The tests run on a bare checkout. They cover the decision logic check by check, the three
-formats against real signed documents, forged evidence files, and the command line end to end
-over real HTTP on the loopback interface.
+formats against real signed documents, forged evidence files (edited numbers, loosened settings,
+dropped controls), and the command line end to end over real HTTP on the loopback interface.
 
 Apache-2.0, like the rest of this repository.
 

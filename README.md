@@ -158,7 +158,7 @@ contains a refused target is rejected as a whole and never charged.
 
 ## Use it as a pipeline gate
 
-[`gate/`](gate/README.md) turns signed reliability evidence into a pipeline check. A firm writes
+[Elenchos](gate/README.md), in `gate/`, turns signed reliability evidence into a pipeline check. A firm writes
 into its [FINOS CALM](https://calm.finos.org) architecture what each outside service must meet. The
 gate verifies signed evidence from an independent oracle (Hosannaith, or any oracle that speaks the
 contract proposed for OpenEAGO), fails the pipeline when a service falls short, and saves an

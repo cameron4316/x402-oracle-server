@@ -1,0 +1,20 @@
+{
+  "name": "reliability-gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A pipeline gate that backs CALM controls on outside services with signed, independently verifiable reliability evidence.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "reliability-gate": "src/cli.ts"
+  },
+  "scripts": {
+    "gate": "node src/cli.ts",
+    "mock-oracle": "node mock-oracle/server.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

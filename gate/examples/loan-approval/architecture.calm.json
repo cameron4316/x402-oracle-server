@@ -1,0 +1,343 @@
+{
+  "$schema": "https://calm.finos.org/release/1.2/meta/calm.json",
+  "unique-id": "loan-approval-outside-services",
+  "name": "Loan approval agent and the outside services it depends on",
+  "description": "A small example for reliability-gate. A loan approval agent calls four services its firm does not run. Each carries an external-service-reliability control: the service must be shown to be reliable by signed evidence from an independent oracle. Two of the services are fictional and are answered by the mock oracle; one is a real pay-per-call endpoint with a real signed report; one has no independent evidence at all.",
+  "nodes": [
+    {
+      "unique-id": "loan-officer",
+      "node-type": "actor",
+      "name": "Loan officer",
+      "description": "Reviews the cases the agent refers for a human decision."
+    },
+    {
+      "unique-id": "loan-approval-agent",
+      "node-type": "service",
+      "name": "Loan approval agent",
+      "description": "Assembles a credit decision by calling tools: a credit score lookup, an employment check and a counterparty risk check, with a hosted model planning the calls. Every one of those tools is a call to a service outside the firm."
+    },
+    {
+      "unique-id": "credit-bureau-api",
+      "node-type": "service",
+      "name": "Credit bureau API (fictional)",
+      "description": "Outside service returning a credit score. Fictional: the evidence for it comes from the mock oracle.",
+      "interfaces": [
+        {
+          "unique-id": "credit-bureau-https",
+          "url": "https://credit-bureau.example/v1/score"
+        }
+      ],
+      "controls": {
+        "external-service-reliability": {
+          "description": "The credit bureau API must be shown to be reliable by signed, independent evidence on every pipeline run.",
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The credit bureau API must be shown to be reliable by signed, independent evidence on every pipeline run.",
+                "aigf-risks": [
+                  "ri-7"
+                ],
+                "aigf-mitigations": [
+                  "mi-4"
+                ],
+                "target": "https://credit-bureau.example/v1/score",
+                "oracle": "http://127.0.0.1:8787",
+                "evidence": {
+                  "format": "openeago-contract",
+                  "from": "http://127.0.0.1:8787/reliability",
+                  "keys": "http://127.0.0.1:8787/.well-known/keys.json"
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 24,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "employment-verification-api",
+      "node-type": "service",
+      "name": "Employment verification API (fictional)",
+      "description": "Outside service confirming an applicant's employment. Fictional: the evidence for it comes from the mock oracle.",
+      "interfaces": [
+        {
+          "unique-id": "employment-verification-https",
+          "url": "https://employment-verification.example/v1/verify"
+        }
+      ],
+      "controls": {
+        "external-service-reliability": {
+          "description": "The employment verification API must be shown to be reliable by signed, independent evidence on every pipeline run.",
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The employment verification API must be shown to be reliable by signed, independent evidence on every pipeline run.",
+                "aigf-risks": [
+                  "ri-7"
+                ],
+                "aigf-mitigations": [
+                  "mi-4"
+                ],
+                "target": "https://employment-verification.example/v1/verify",
+                "oracle": "http://127.0.0.1:8787",
+                "evidence": {
+                  "format": "openeago-contract",
+                  "from": "http://127.0.0.1:8787/reliability",
+                  "keys": "http://127.0.0.1:8787/.well-known/keys.json"
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 24,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "counterparty-risk-check",
+      "node-type": "service",
+      "name": "Pay-per-call risk check (A-Identity risk_check)",
+      "description": "A real pay-per-call (x402) endpoint, used here as the example of an outside service an agent pays per request. The evidence is Hosannaith's dated, signed public report on it, verified against Hosannaith's published key.",
+      "interfaces": [
+        {
+          "unique-id": "risk-check-https",
+          "url": "https://a-identity.xyz/api/x402/algorand/tools/risk_check"
+        }
+      ],
+      "controls": {
+        "external-service-reliability": {
+          "description": "The pay-per-call risk check must be shown to be reliable, and to demand payment correctly, by a signed report no more than 90 days old.",
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The pay-per-call risk check must be shown to be reliable, and to demand payment correctly, by a signed report no more than 90 days old.",
+                "aigf-risks": [
+                  "ri-7"
+                ],
+                "aigf-mitigations": [
+                  "mi-4"
+                ],
+                "target": "https://a-identity.xyz/api/x402/algorand/tools/risk_check",
+                "evidence": {
+                  "format": "hosannaith-report",
+                  "from": "../../../public-reports/a-identity-2026-11.json",
+                  "keys": "../../../attest/jwks-history.json",
+                  "trusted-kids": [
+                    "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k"
+                  ]
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500,
+                  "min-protocol-conformance": 1
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 2160,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "model-api",
+      "node-type": "service",
+      "name": "Hosted model API (fictional)",
+      "description": "The hosted model that plans the agent's tool calls. No independent, signed reliability evidence is configured for it, which is what the gate reports.",
+      "interfaces": [
+        {
+          "unique-id": "model-https",
+          "url": "https://model-provider.example/v1/chat"
+        }
+      ],
+      "controls": {
+        "external-service-reliability": {
+          "description": "The hosted model API should be shown to be available by signed, independent evidence. Advisory until such evidence exists.",
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The hosted model API should be shown to be available by signed, independent evidence. Advisory until such evidence exists.",
+                "aigf-risks": [
+                  "ri-7"
+                ],
+                "aigf-mitigations": [
+                  "mi-4"
+                ],
+                "target": "https://model-provider.example/v1/chat",
+                "window-hours": 720,
+                "thresholds": {
+                  "min-availability": 0.999
+                },
+                "max-evidence-age-hours": 24,
+                "enforcement": "advisory"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "unique-id": "officer-reviews-cases",
+      "description": "The loan officer reviews referred cases",
+      "relationship-type": {
+        "interacts": {
+          "actor": "loan-officer",
+          "nodes": [
+            "loan-approval-agent"
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "agent-to-credit-bureau",
+      "description": "Looks up the applicant's credit score",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "loan-approval-agent"
+          },
+          "destination": {
+            "node": "credit-bureau-api",
+            "interfaces": [
+              "credit-bureau-https"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "agent-to-employment-verification",
+      "description": "Confirms the applicant's employment",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "loan-approval-agent"
+          },
+          "destination": {
+            "node": "employment-verification-api",
+            "interfaces": [
+              "employment-verification-https"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "agent-to-risk-check",
+      "description": "Buys a counterparty risk check, paying per call",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "loan-approval-agent"
+          },
+          "destination": {
+            "node": "counterparty-risk-check",
+            "interfaces": [
+              "risk-check-https"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "agent-to-model",
+      "description": "Asks the hosted model to plan the next tool call",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "loan-approval-agent"
+          },
+          "destination": {
+            "node": "model-api",
+            "interfaces": [
+              "model-https"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    }
+  ],
+  "flows": [
+    {
+      "unique-id": "flow-credit-decision",
+      "name": "Credit decision",
+      "description": "The agent gathers what it needs from outside services and refers the case to a person.",
+      "transitions": [
+        {
+          "relationship-unique-id": "agent-to-model",
+          "sequence-number": 1,
+          "description": "The model plans which tools to call"
+        },
+        {
+          "relationship-unique-id": "agent-to-credit-bureau",
+          "sequence-number": 2,
+          "description": "Credit score lookup"
+        },
+        {
+          "relationship-unique-id": "agent-to-employment-verification",
+          "sequence-number": 3,
+          "description": "Employment check"
+        },
+        {
+          "relationship-unique-id": "agent-to-risk-check",
+          "sequence-number": 4,
+          "description": "Counterparty risk check, paid per call"
+        },
+        {
+          "relationship-unique-id": "officer-reviews-cases",
+          "sequence-number": 5,
+          "description": "A loan officer reviews the referred case"
+        }
+      ]
+    }
+  ],
+  "metadata": [
+    {
+      "example-of": "reliability-gate",
+      "license": "Apache-2.0",
+      "note": "The credit bureau, employment verification and model services are fictional (.example names). The mock oracle's figures for them are not measurements. The risk check endpoint and its report are real; the report says exactly what it covers."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "degraded: the fictional employment verification service has had outages and is slow",
+  "services": {
+    "https://credit-bureau.example/v1/score": {
+      "reliability_score": 0.991,
+      "availability_pct": 0.9995,
+      "error_rate": 0.0005,
+      "latency_p50_ms": 110,
+      "latency_p95_ms": 240,
+      "latency_p99_ms": 410,
+      "observations_per_hour": 20,
+      "confidence": "history"
+    },
+    "https://employment-verification.example/v1/verify": {
+      "reliability_score": 0.882,
+      "availability_pct": 0.9712,
+      "error_rate": 0.0288,
+      "latency_p50_ms": 640,
+      "latency_p95_ms": 2140,
+      "latency_p99_ms": 4800,
+      "observations_per_hour": 20,
+      "confidence": "history"
+    }
+  }
+}

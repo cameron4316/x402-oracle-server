@@ -1,0 +1,287 @@
+{
+  "description": "Adds the outside services behind the Steel Thread's stub workers, and an external-service-reliability control on each outside service, to the FINOS AI Steel Thread loan approval architecture. The base file is not edited; this overlay is applied to it.",
+  "base": {
+    "repository": "https://github.com/finos-hack/ai-steel-thread-demo",
+    "commit": "2782173d47f5074f8767dbdf553fa9165ee1ccd8",
+    "path": "architecture/loan-approval.calm.json",
+    "sha256": "a687582d4a27f9c57a71db873371be7e4befda28b0bf773f316b3443fd53229f"
+  },
+  "add-nodes": [
+    {
+      "unique-id": "credit-bureau-api",
+      "node-type": "service",
+      "name": "Credit Bureau API (fictional)",
+      "description": "The outside service a production Check Credit Score Worker would call. Fictional: evidence comes from the mock oracle.",
+      "interfaces": [
+        {
+          "unique-id": "credit-bureau-https-api",
+          "type": "api",
+          "host": "credit-bureau.example",
+          "path": "/v1/score"
+        }
+      ],
+      "metadata": {
+        "fictional": true
+      },
+      "controls": {
+        "external-service-reliability": {
+          "description": "The credit bureau must be shown to be reliable by signed, independent evidence on every pipeline run.",
+          "aigf-mitigations": [
+            "mi-4"
+          ],
+          "aigf-risks": [
+            "ri-7"
+          ],
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The credit bureau must be shown to be reliable by signed, independent evidence on every pipeline run.",
+                "aigf-catalog-url": "https://air-governance-framework.finos.org/mitigations/mi-4_ai-system-observability.html",
+                "target": "https://credit-bureau.example/v1/score",
+                "oracle": "http://127.0.0.1:8787",
+                "evidence": {
+                  "format": "openeago-contract",
+                  "from": "http://127.0.0.1:8787/reliability",
+                  "keys": "http://127.0.0.1:8787/.well-known/keys.json"
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 24,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "employment-verification-api",
+      "node-type": "service",
+      "name": "Employment Verification API (fictional)",
+      "description": "The outside service a production Verify Employment Worker would call. Fictional: evidence comes from the mock oracle.",
+      "interfaces": [
+        {
+          "unique-id": "employment-verification-https-api",
+          "type": "api",
+          "host": "employment-verification.example",
+          "path": "/v1/verify"
+        }
+      ],
+      "metadata": {
+        "fictional": true
+      },
+      "controls": {
+        "external-service-reliability": {
+          "description": "The employment verification service must be shown to be reliable by signed, independent evidence on every pipeline run.",
+          "aigf-mitigations": [
+            "mi-4"
+          ],
+          "aigf-risks": [
+            "ri-7"
+          ],
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The employment verification service must be shown to be reliable by signed, independent evidence on every pipeline run.",
+                "aigf-catalog-url": "https://air-governance-framework.finos.org/mitigations/mi-4_ai-system-observability.html",
+                "target": "https://employment-verification.example/v1/verify",
+                "oracle": "http://127.0.0.1:8787",
+                "evidence": {
+                  "format": "openeago-contract",
+                  "from": "http://127.0.0.1:8787/reliability",
+                  "keys": "http://127.0.0.1:8787/.well-known/keys.json"
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 24,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "unique-id": "counterparty-risk-check",
+      "node-type": "service",
+      "name": "Pay-per-call Risk Check (A-Identity risk_check)",
+      "description": "A real pay-per-call (x402) endpoint, standing in for an outside risk check the Fraud Detection Worker could buy per request. Evidence is Hosannaith's signed public report, fetched from Hosannaith and verified against its published key.",
+      "interfaces": [
+        {
+          "unique-id": "risk-check-https-api",
+          "type": "api",
+          "host": "a-identity.xyz",
+          "path": "/api/x402/algorand/tools/risk_check"
+        }
+      ],
+      "metadata": {
+        "fictional": false,
+        "evidence-report": "https://hosannaith.com/reports/a-identity-2026-11"
+      },
+      "controls": {
+        "external-service-reliability": {
+          "description": "The pay-per-call risk check must be shown to be reliable, and to demand payment correctly, by a signed report no more than 90 days old.",
+          "aigf-mitigations": [
+            "mi-4"
+          ],
+          "aigf-risks": [
+            "ri-7"
+          ],
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The pay-per-call risk check must be shown to be reliable, and to demand payment correctly, by a signed report no more than 90 days old.",
+                "aigf-catalog-url": "https://air-governance-framework.finos.org/mitigations/mi-4_ai-system-observability.html",
+                "target": "https://a-identity.xyz/api/x402/algorand/tools/risk_check",
+                "evidence": {
+                  "format": "hosannaith-report",
+                  "from": "https://api.hosannaith.com/reports/a-identity-2026-11.json",
+                  "keys": "https://api.hosannaith.com/.well-known/hosannaith-keys.json",
+                  "trusted-kids": [
+                    "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k"
+                  ]
+                },
+                "window-hours": 168,
+                "thresholds": {
+                  "min-reliability-score": 0.95,
+                  "min-availability": 0.99,
+                  "max-error-rate": 0.05,
+                  "max-latency-p95-ms": 1500,
+                  "min-protocol-conformance": 1
+                },
+                "min-confidence": "history",
+                "min-observations": 1000,
+                "max-evidence-age-hours": 2160,
+                "enforcement": "blocking"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "add-relationships": [
+    {
+      "unique-id": "credit-score-worker-to-bureau",
+      "description": "In production, the credit score tool is a call to an outside credit bureau",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "worker-check-credit-score"
+          },
+          "destination": {
+            "node": "credit-bureau-api",
+            "interfaces": [
+              "credit-bureau-https-api"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "employment-worker-to-verification",
+      "description": "In production, the employment tool is a call to an outside verification service",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "worker-verify-employment"
+          },
+          "destination": {
+            "node": "employment-verification-api",
+            "interfaces": [
+              "employment-verification-https-api"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    },
+    {
+      "unique-id": "fraud-worker-to-risk-check",
+      "description": "Fraud detection buys a counterparty risk check, paying per call",
+      "relationship-type": {
+        "connects": {
+          "source": {
+            "node": "worker-fraud-detection"
+          },
+          "destination": {
+            "node": "counterparty-risk-check",
+            "interfaces": [
+              "risk-check-https-api"
+            ]
+          }
+        }
+      },
+      "protocol": "HTTPS"
+    }
+  ],
+  "add-to-composition": {
+    "ecosystem-composition": [
+      "credit-bureau-api",
+      "employment-verification-api",
+      "counterparty-risk-check"
+    ]
+  },
+  "attach-controls": {
+    "nodes": {
+      "openai-chat-api": {
+        "external-service-reliability": {
+          "description": "The hosted model API should be shown to be available by signed, independent evidence. Advisory: no oracle evidence source is configured for it here, and the gate reports that.",
+          "aigf-mitigations": [
+            "mi-4"
+          ],
+          "aigf-risks": [
+            "ri-7"
+          ],
+          "requirements": [
+            {
+              "requirement-url": "https://raw.githubusercontent.com/cameron4316/x402-oracle-server/main/gate/controls/external-service-reliability.requirement.json",
+              "config": {
+                "control-id": "external-service-reliability",
+                "name": "External Service Reliability",
+                "description": "The hosted model API should be shown to be available by signed, independent evidence. Advisory: no oracle evidence source is configured for it here, and the gate reports that.",
+                "aigf-catalog-url": "https://air-governance-framework.finos.org/mitigations/mi-4_ai-system-observability.html",
+                "target": "https://api.openai.com/v1/chat/completions",
+                "window-hours": 720,
+                "thresholds": {
+                  "min-availability": 0.999
+                },
+                "max-evidence-age-hours": 24,
+                "enforcement": "advisory"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "append-metadata": {
+    "aigf-risks": [
+      "ri-7"
+    ]
+  }
+}

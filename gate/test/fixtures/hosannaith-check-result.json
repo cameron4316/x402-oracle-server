@@ -1,0 +1,31 @@
+{
+  "target": "https://x402.goplausible.xyz/examples/weather",
+  "checkId": "reliability",
+  "status": "pass",
+  "score": 98.3,
+  "detail": {
+    "observations": 480,
+    "windowHours": 24,
+    "uptimePct": 100,
+    "correct402Pct": 100,
+    "p50LatencyMs": 101,
+    "p95LatencyMs": 168,
+    "p99LatencyMs": 2708,
+    "score": 98.3,
+    "firstObservedAt": "2026-11-03T19:07:25.027Z",
+    "lastObservedAt": "2026-11-04T19:04:54.078Z",
+    "availability_pct": 100,
+    "error_rate_pct": 0,
+    "protocol_conformance_pct": 100,
+    "score_normalized": 0.983,
+    "confidence": "history"
+  },
+  "observedAt": "2026-11-04T19:06:12.319Z",
+  "spec_version": "1.0.0",
+  "generated_at": "2026-11-04T19:06:12.319Z",
+  "signature": {
+    "alg": "ES256",
+    "kid": "tva-5LvOz8DrLJKcj3pYlryzOtKpgAcos-56dyWRA-k",
+    "sig": "slTMfmaSR8vAsTh4HRAuof-wZvR6jAXkAO-Ug7lgNEi_NwEQ9x3cpADBAu_rQACF4qU7AvlOJOoeAERCwqOT7g"
+  }
+}

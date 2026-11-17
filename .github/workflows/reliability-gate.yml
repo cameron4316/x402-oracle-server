@@ -1,0 +1,157 @@
+name: Reliability gate
+
+# The gate in gate/: its tests, its example run as a pipeline would run it, the CALM validation of
+# its example architecture, and the run against the FINOS AI Steel Thread demo's architecture.
+# Read-only: no secrets, no deploys, no publishing, no payments.
+on:
+  pull_request:
+    paths:
+      - gate/**
+      - src/attest/**
+      - attest/**
+      - public-reports/**
+      - calm/aigf-sources.json
+      - .github/workflows/reliability-gate.yml
+  push:
+    branches: [main]
+    paths:
+      - gate/**
+      - src/attest/**
+      - attest/**
+      - public-reports/**
+      - calm/aigf-sources.json
+      - .github/workflows/reliability-gate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The gate has no dependencies, so its tests run on a bare checkout: nothing is installed.
+  test:
+    name: Gate tests and demo (Node ${{ matrix.node }}, nothing installed)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Tests
+        run: node --test "gate/test/*.test.ts"
+      - name: Demo, start to finish
+        run: node gate/demo/demo.ts
+
+  typecheck:
+    name: Gate typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc -p gate/tsconfig.json
+
+  # The example, checked the way a pipeline would check it: through the action, with the evidence
+  # kept as a build artifact and re-audited from that file alone.
+  example:
+    name: Example architecture (gate action, evidence, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Start the mock oracle
+        run: |
+          node gate/mock-oracle/server.ts --port 8787 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && exit 0; sleep 0.5; done
+          echo "mock oracle did not start" >&2; exit 1
+      - name: Gate
+        uses: ./gate
+        with:
+          architecture: gate/examples/loan-approval/architecture.calm.json
+          evidence-out: gate-out/evidence.json
+          metrics-out: gate-out/metrics.prom
+      - name: Audit the saved evidence against the architecture in the repository and keys fetched separately
+        run: >-
+          node gate/src/cli.ts audit gate-out/evidence.json
+          --architecture gate/examples/loan-approval/architecture.calm.json
+          --trust-keys attest/jwks-history.json
+          --trust-keys http://127.0.0.1:8787/.well-known/keys.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reliability-gate-evidence-example
+          path: gate-out/
+
+  calm:
+    name: Example architecture (CALM validate, strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: calm validate
+        run: >-
+          npx --yes @finos/calm-cli@1.69.0 validate
+          -a gate/examples/loan-approval/architecture.calm.json
+          -u gate/examples/loan-approval/url-to-local-file-mapping.json
+          -f pretty --strict
+
+  # The same control on the FINOS AI Steel Thread demo's own architecture, at a pinned commit.
+  # Their file is read and extended by an overlay; it is never copied into this repository.
+  steel-thread:
+    name: FINOS AI Steel Thread architecture (overlay, CALM validate, gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Check out the Steel Thread demo at the commit the overlay names
+        run: |
+          commit=$(node -p "require('./gate/examples/steel-thread/overlay.json').base.commit")
+          repository=$(node -p "require('./gate/examples/steel-thread/overlay.json').base.repository")
+          git clone --quiet "$repository" "$RUNNER_TEMP/steel-thread"
+          git -C "$RUNNER_TEMP/steel-thread" checkout --quiet "$commit"
+      - name: Apply the overlay
+        run: node gate/examples/steel-thread/run.ts --steel-thread "$RUNNER_TEMP/steel-thread" --skip-gate
+      - name: calm validate the merged architecture
+        run: >-
+          npx --yes @finos/calm-cli@1.69.0 validate
+          -a gate/examples/steel-thread/out/loan-approval.with-external-services.calm.json
+          -u gate/examples/steel-thread/out/url-to-local-file-mapping.json
+          -f pretty
+      # Required: Hosannaith's signed report and keys are read from this repository, so the result
+      # depends on nothing outside the checkout and the Steel Thread clone.
+      - name: Gate (offline)
+        run: node gate/examples/steel-thread/run.ts --steel-thread "$RUNNER_TEMP/steel-thread" --offline
+      - name: Audit the saved evidence (architecture, Hosannaith's key history and the mock oracle's key confirmed)
+        run: >-
+          node gate/src/cli.ts audit gate/examples/steel-thread/out/evidence.json
+          --architecture gate/examples/steel-thread/out/loan-approval.with-external-services.calm.json
+          --trust-keys attest/jwks-history.json
+          --trust-keys gate/examples/steel-thread/out/mock-oracle-keys.json
+      # Informational: the same run with the report fetched live from Hosannaith's API. An outage
+      # there shows up in this step's log; it does not fail the workflow.
+      - name: Gate again, fetching Hosannaith's signed report live
+        continue-on-error: true
+        run: node gate/examples/steel-thread/run.ts --steel-thread "$RUNNER_TEMP/steel-thread"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reliability-gate-evidence-steel-thread
+          path: gate/examples/steel-thread/out/

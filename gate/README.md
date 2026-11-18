@@ -1,12 +1,15 @@
-# Reliability gate
+# Elenchos
 
 **Proof, not promises, for the outside services your agents depend on.**
+
+Elenchos (ἔλεγχος, Greek for a proof or a test, and in modern Greek an audit) is a reliability
+gate for pipelines. The command and the files keep the plain name `reliability-gate`.
 
 An AI agent in a bank does not work alone. It calls a credit bureau, an employment check, a risk
 service, a hosted model. Each of those is run by someone else. If one of them is down, slow or
 misbehaving, the agent's work is wrong or late, and the firm finds out afterwards.
 
-Reliability gate lets a firm write, in its [CALM](https://calm.finos.org) architecture, what each
+Elenchos lets a firm write, in its [CALM](https://calm.finos.org) architecture, what each
 outside service must meet. It then checks that requirement on every pipeline run against **signed
 evidence from an independent oracle**, fails the pipeline when a service falls short, and saves an
 evidence file that an auditor can re-check later without the pipeline, the network or the oracle.

@@ -1,4 +1,6 @@
-# FINOS Fall 2026 Hackathon entry: Reliability gate
+# FINOS Fall 2026 Hackathon entry: Elenchos
+
+_Elenchos (ἔλεγχος): Greek for a proof or a test, and in modern Greek an audit. A reliability gate for pipelines._
 
 **Track:** Governance-as-Code (extending the AI Steel Thread demo)
 **Entrant:** Cameron Vickers, solo

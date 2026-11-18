@@ -13,17 +13,21 @@
 //     reviewed architecture (`audit --architecture`), and the file's controls must be exactly its.
 //   - The key set in the file is the one the pipeline used. To rule out a substituted key set, the
 //     auditor supplies the oracle's keys from a source they trust (`audit --trust-keys`).
-//   - The time of the run, and which signed document was presented, are the file's own statements.
-//     Nothing in the file can confirm them until the pipeline itself signs the file.
+//   - The time of the run, and which signed document was presented, are the file's own statements
+//     unless the pipeline signed the file (`check --sign-key`). The auditor then supplies the
+//     pipeline's public keys (`audit --pipeline-keys`), and any change to the file breaks that
+//     signature. What remains is the custody of the pipeline's key: whoever holds it can sign.
 //   - The digest detects accidental change. It is not a signature: a forger can recompute it.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { canonicalize } from './attest/jcs.ts';
+import type { Signer, SignatureBlock } from './attest/sign.ts';
+import { verifyAttestation } from './attest/verify.ts';
 import { findControls, type ControlInstance } from './calm.ts';
 import type { Measurement } from './contract.ts';
 import { parseControlConfig } from './control.ts';
-import { asKeySet, evaluate, type Check, type Loaded } from './evaluate.ts';
+import { asKeySet, evaluate, printable, type Check, type Loaded } from './evaluate.ts';
 import { evidenceRef, loadJson } from './sources.ts';
 import { GATE_NAME, GATE_VERSION } from './version.ts';
 
@@ -71,7 +75,16 @@ export interface Bundle {
   summary: { controls: number; pass: number; fail: number; warn: number; invalid: number };
   controls: ControlRecord[];
   digest: { alg: 'sha256'; canonicalization: 'RFC 8785'; value: string };
+  /**
+   * Present when the pipeline signed the file: ES256 over the RFC 8785 canonical JSON of everything
+   * else in it, the same scheme the oracles use. It is what makes the time of the run, the settings
+   * and the choice of documents the pipeline's statement instead of the file's.
+   */
+  signature?: SignatureBlock;
 }
+
+/** The same tolerance for slightly disagreeing clocks that the oracle key checks use. */
+const KEY_LIFE_TOLERANCE_MS = 5 * 60 * 1000;
 
 export const sha256Hex = (data: string | Buffer): string => createHash('sha256').update(data).digest('hex');
 const canonicalSha256 = (value: unknown): string => sha256Hex(canonicalize(value));
@@ -88,6 +101,8 @@ function summarize(controls: ControlRecord[]): Bundle['summary'] {
 export interface RunOptions {
   now: Date;
   clock: 'system' | 'pinned';
+  /** When given, the evidence file is signed with the pipeline's key. */
+  signer?: Signer;
 }
 
 /** Checks every external-service-reliability control in the architecture file. */
@@ -176,7 +191,8 @@ export async function runGate(architecturePath: string, options: RunOptions): Pr
     summary,
     controls,
   };
-  return { ...unsigned, digest: digestOf(unsigned) };
+  const withDigest = { ...unsigned, digest: digestOf(unsigned) };
+  return options.signer ? { ...withDigest, signature: options.signer.sign(withDigest) } : withDigest;
 }
 
 export interface AuditControl {
@@ -206,8 +222,16 @@ export interface AuditResult {
    * architecture was supplied.
    */
   architecture: 'matches' | 'differs' | 'not-checked';
-  /** When the file says the gate ran. Nothing inside the file can confirm this. */
+  /** When the file says the gate ran. Confirmed only by a pipeline signature. */
   evaluated_at: string | null;
+  /**
+   * confirmed: signed, and the signature verifies against pipeline keys the auditor supplied.
+   * invalid: signed, keys supplied, and it does not verify (or keys were supplied and it is unsigned).
+   * unconfirmed: signed, but no pipeline keys were supplied to check it with.
+   * absent: not signed, and no pipeline keys were supplied.
+   */
+  pipeline_signature: 'confirmed' | 'invalid' | 'unconfirmed' | 'absent';
+  pipeline_kid: string | null;
   controls: AuditControl[];
   problems: string[];
 }
@@ -246,9 +270,17 @@ function isBundle(value: unknown): value is Bundle {
  *   - `reviewed`: the architecture the gate ran on. The file's controls must be exactly the
  *     controls in it. Without this, someone could loosen a threshold in the file, or drop a failing
  *     control from it, and redo everything that follows.
- * The time of the run is the file's own statement and cannot be confirmed from the file.
+ * The time of the run, and which signed documents were presented, are the file's own statements
+ * unless the pipeline signed the file. `pipelineKeySets` are the pipeline's public keys from a
+ * source the auditor trusts: when given, the file must carry a signature that verifies against
+ * one of them, made while that key was in use.
  */
-export function auditBundle(value: unknown, trustedKeySets: unknown[] = [], reviewed: ReviewedArchitecture | null = null): AuditResult {
+export function auditBundle(
+  value: unknown,
+  trustedKeySets: unknown[] = [],
+  reviewed: ReviewedArchitecture | null = null,
+  pipelineKeySets: unknown[] = [],
+): AuditResult {
   const problems: string[] = [];
   if (!isBundle(value)) {
     return {
@@ -258,11 +290,13 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = [], revi
       trusted_keys_supplied: trustedKeySets.length > 0,
       architecture: reviewed ? 'differs' : 'not-checked',
       evaluated_at: null,
+      pipeline_signature: pipelineKeySets.length > 0 ? 'invalid' : 'absent',
+      pipeline_kid: null,
       controls: [],
       problems: ['not a reliability-gate evidence file'],
     };
   }
-  const { digest, ...unsigned } = value;
+  const { digest, signature, ...unsigned } = value;
   let digestOk = false;
   try {
     digestOk = digest.value === canonicalSha256(unsigned);
@@ -270,6 +304,42 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = [], revi
     digestOk = false;
   }
   if (!digestOk) problems.push('the file has been changed since it was written (digest mismatch)');
+
+  // The pipeline's signature covers everything in the file but itself.
+  let pipelineSignature: AuditResult['pipeline_signature'] = signature === undefined ? 'absent' : 'unconfirmed';
+  let pipelineKid: string | null = null;
+  const signatureKid = (signature as { kid?: unknown } | undefined)?.kid;
+  if (typeof signatureKid === 'string') pipelineKid = printable(signatureKid, 100);
+  if (pipelineKeySets.length > 0) {
+    pipelineSignature = 'invalid';
+    const sets = pipelineKeySets.map(asKeySet);
+    if (sets.some((k) => k === null)) problems.push('a pipeline key set is not a JWKS-style object with a "keys" list');
+    if (signature === undefined) {
+      problems.push('the file is not signed by the pipeline, but pipeline keys were supplied');
+    } else {
+      let reason = 'unknown_kid';
+      for (const set of sets) {
+        if (set === null) continue;
+        const outcome = verifyAttestation(value, set);
+        if (!outcome.ok) {
+          if (outcome.reason !== 'unknown_kid') reason = outcome.reason;
+          continue;
+        }
+        // Signed with a known key: it must also have been in use at the stated time of the run.
+        const key = set.keys.find((k) => k.kid === outcome.kid);
+        const at = Date.parse(value.evaluated_at);
+        const activated = typeof key?.activated_at === 'string' ? Date.parse(key.activated_at) : NaN;
+        const retired = typeof key?.retired_at === 'string' ? Date.parse(key.retired_at) : NaN;
+        if (at < activated - KEY_LIFE_TOLERANCE_MS || at > retired + KEY_LIFE_TOLERANCE_MS) {
+          reason = 'the stated time of the run is outside the life of the pipeline key';
+          continue;
+        }
+        pipelineSignature = 'confirmed';
+        break;
+      }
+      if (pipelineSignature !== 'confirmed') problems.push(`the pipeline signature does not verify (${reason})`);
+    }
+  }
 
   const trusted = trustedKeySets.map(asKeySet);
   if (trusted.some((t) => t === null)) problems.push('a trusted key set is not a JWKS-style object with a "keys" list');
@@ -384,6 +454,8 @@ export function auditBundle(value: unknown, trustedKeySets: unknown[] = [], revi
     trusted_keys_supplied: trustedKeySets.length > 0,
     architecture: !reviewed ? 'not-checked' : architectureOk ? 'matches' : 'differs',
     evaluated_at: value.evaluated_at,
+    pipeline_signature: pipelineSignature,
+    pipeline_kid: pipelineKid,
     controls,
     problems,
   };

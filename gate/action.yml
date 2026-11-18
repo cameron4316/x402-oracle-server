@@ -12,6 +12,11 @@ inputs:
   metrics-out:
     description: Where to save the results as Prometheus metrics. Empty for none.
     default: ''
+  sign-key-file:
+    description: >-
+      Path to the pipeline's P-256 private key (PEM). The evidence file is then signed. Leave empty
+      and set the RELIABILITY_GATE_SIGN_KEY environment variable to the PEM text to sign from a secret.
+    default: ''
   verbose:
     description: Set to "true" to list every check, also for controls that are met.
     default: 'false'
@@ -25,8 +30,10 @@ runs:
         GATE_EVIDENCE_OUT: ${{ inputs.evidence-out }}
         GATE_METRICS_OUT: ${{ inputs.metrics-out }}
         GATE_VERBOSE: ${{ inputs.verbose }}
+        GATE_SIGN_KEY_FILE: ${{ inputs.sign-key-file }}
       run: |
         args=(check --architecture "$GATE_ARCHITECTURE" --evidence-out "$GATE_EVIDENCE_OUT")
         if [ -n "$GATE_METRICS_OUT" ]; then args+=(--metrics-out "$GATE_METRICS_OUT"); fi
         if [ "$GATE_VERBOSE" = "true" ]; then args+=(--verbose); fi
+        if [ -n "$GATE_SIGN_KEY_FILE" ]; then args+=(--sign-key "$GATE_SIGN_KEY_FILE"); fi
         node "$GITHUB_ACTION_PATH/src/cli.ts" "${args[@]}"

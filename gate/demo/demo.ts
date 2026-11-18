@@ -3,14 +3,16 @@
 //   node demo/demo.ts
 //
 // It starts the mock oracle, runs the gate against the example architecture, lets one service
-// degrade, and then plays an insider who edits the saved evidence to hide the failure, twice.
+// degrade, and then plays an insider who tries three ways to hide the failure in the saved evidence.
 // Uses no shell, so it runs the same on Linux, macOS and Windows.
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { loadScenario, startMockOracle } from '../mock-oracle/server.ts';
 import { canonicalize } from '../src/attest/jcs.ts';
+import { publicJwk } from '../src/attest/keys.ts';
+import { createSigner } from '../src/attest/sign.ts';
 import { parseControlConfig } from '../src/control.ts';
 import { evaluate } from '../src/evaluate.ts';
 
@@ -47,29 +49,41 @@ try {
 }
 const mockKeys = `${oracle.url}/.well-known/keys.json`;
 
+// The pipeline's own signing key. A real pipeline keeps the private half in its secret store and
+// gives auditors the public half. This one is made fresh for each run of the demo and is worthless.
+const pipelineKey = `${out}pipeline-key.pem`;
+const pipelineKeys = `${out}pipeline-keys.json`;
+{
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  writeFileSync(here(`../${pipelineKey}`), privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
+  const key = { ...publicJwk(privateKey), kid: createSigner(privateKey).kid, alg: 'ES256', use: 'sig', status: 'active' };
+  writeFileSync(here(`../${pipelineKeys}`), JSON.stringify({ keys: [key], revoked_keys: [] }, null, 2) + '\n');
+}
+
 try {
   step(
     '1. The pipeline gate, on a good day',
     'Four outside services. Two fictional ones answered by the mock oracle, one real pay-per-call\nendpoint with a real signed report, and one with no independent evidence at all.',
   );
   const good = `${out}evidence-pass.json`;
-  await gate(['check', '--architecture', architecture, '--evidence-out', good]);
+  await gate(['check', '--architecture', architecture, '--evidence-out', good, '--sign-key', pipelineKey]);
 
   step(
     '2. An auditor re-checks the saved evidence, offline',
-    "Every decision is recomputed from the signed documents inside the file. The auditor brings two\nthings of their own: the reviewed architecture, and the oracles' public keys.",
+    "Every decision is recomputed from the signed documents inside the file. The auditor brings three\nthings of their own: the reviewed architecture, the oracles' public keys and the pipeline's public key.",
   );
-  const confirm = ['--architecture', architecture, '--trust-keys', hosannaithKeys, '--trust-keys', mockKeys];
+  const confirm = ['--architecture', architecture, '--trust-keys', hosannaithKeys, '--trust-keys', mockKeys, '--pipeline-keys', pipelineKeys];
   await gate(['audit', good, ...confirm]);
 
   step('3. One service degrades', 'The employment verification service has had outages and has become slow. Same gate, same command.');
   oracle.setScenario(loadScenario('degraded'));
   const bad = `${out}evidence-fail.json`;
-  await gate(['check', '--architecture', architecture, '--evidence-out', bad]);
+  await gate(['check', '--architecture', architecture, '--evidence-out', bad, '--sign-key', pipelineKey]);
 
   const failing = (): any => JSON.parse(readFileSync(here(`../${bad}`), 'utf8'));
   const save = (name: string, forged: any): string => {
-    const { digest: _old, ...unsigned } = forged;
+    // The insider can recompute the digest. They cannot redo the pipeline's signature, so it is left as it was.
+    const { digest: _old, signature: _signature, ...unsigned } = forged;
     forged.digest.value = createHash('sha256').update(canonicalize(unsigned)).digest('hex');
     writeFileSync(here(`../${out}${name}`), JSON.stringify(forged, null, 2) + '\n');
     return `${out}${name}`;
@@ -93,31 +107,56 @@ try {
   markPassed(numbers);
   await gate(['audit', save('evidence-forged-numbers.json', numbers), ...confirm]);
   console.log('\nThe digest was recomputed, so the file looks intact. The oracle signature over the edited');
-  console.log('numbers no longer verifies, so the recomputed decision is "fail" and the audit says so.');
+  console.log('numbers no longer verifies, so the recomputed decision is "fail". The pipeline signature over');
+  console.log('the file no longer verifies either.');
 
   step(
     '5. A subtler edit: leave the numbers alone, loosen the rule',
     "The insider cannot touch what the oracle signed, so they lower the thresholds recorded in the\nfile until the bad numbers pass, and redo every check so the file agrees with itself.",
   );
+  const redo = (forged: any): void => {
+    for (const control of forged.controls) {
+      const parsed = parseControlConfig(control.config);
+      if (!parsed.ok || !control.evidence) continue;
+      const redone = evaluate({
+        spec: parsed.spec,
+        document: { ok: true, value: control.evidence.document },
+        keySet: { ok: true, value: control.keys.key_set },
+        now: new Date(forged.evaluated_at),
+      });
+      Object.assign(control, { decision: redone.decision, checks: redone.checks, measurement: redone.measurement });
+    }
+  };
   const rule = failing();
   for (const control of rule.controls) {
-    if (control.id !== 'employment-verification-api') continue;
-    control.config.thresholds = { 'min-reliability-score': 0.8, 'min-availability': 0.95, 'max-error-rate': 0.05, 'max-latency-p95-ms': 5000 };
-    const parsed = parseControlConfig(control.config);
-    if (!parsed.ok) throw new Error(parsed.errors.join('; '));
-    const redone = evaluate({
-      spec: parsed.spec,
-      document: { ok: true, value: control.evidence.document },
-      keySet: { ok: true, value: control.keys.key_set },
-      now: new Date(rule.evaluated_at),
-    });
-    Object.assign(control, { decision: redone.decision, checks: redone.checks, measurement: redone.measurement });
+    if (control.id === 'employment-verification-api') {
+      control.config.thresholds = { 'min-reliability-score': 0.8, 'min-availability': 0.95, 'max-error-rate': 0.05, 'max-latency-p95-ms': 5000 };
+    }
   }
+  redo(rule);
   markPassed(rule);
   await gate(['audit', save('evidence-forged-rule.json', rule), ...confirm]);
   console.log('\nThis file agrees with itself: the signatures are valid and the looser thresholds are met.');
   console.log('It is caught because the auditor brought the reviewed architecture, and the thresholds in');
   console.log('the file are not the ones in it. Without --architecture the audit says it could not confirm that.');
+
+  step(
+    '6. The quietest edit: show an earlier, better result',
+    "Nothing is altered at all. The insider takes the oracle's genuine signed document from the good\nrun in step 1, puts it in place of the bad one, and sets the time of the run back to match.",
+  );
+  const earlier = JSON.parse(readFileSync(here(`../${good}`), 'utf8'));
+  const replay = failing();
+  for (const control of replay.controls) {
+    if (control.id !== 'employment-verification-api') continue;
+    control.evidence.document = earlier.controls.find((c: any) => c.id === control.id).evidence.document;
+  }
+  replay.evaluated_at = earlier.evaluated_at;
+  redo(replay);
+  markPassed(replay);
+  await gate(['audit', save('evidence-forged-replay.json', replay), ...confirm]);
+  console.log('\nEvery signature from the oracle is genuine, the thresholds are the reviewed ones, and the');
+  console.log('numbers pass. Only the pipeline knows which document it was actually shown and when, and');
+  console.log('it signed that. The edited file no longer carries its valid signature.');
 } finally {
   await oracle.close();
 }

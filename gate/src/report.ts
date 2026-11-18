@@ -119,16 +119,28 @@ export function renderAudit(result: AuditResult): string {
   }
   if (result.architecture === 'matches') lines.push('Controls: the same controls, with the same settings, as the reviewed architecture');
   if (result.architecture === 'differs') lines.push('Controls: the file DIFFERS from the reviewed architecture');
-  if (result.evaluated_at) lines.push(`Run time: ${result.evaluated_at}, as stated by the file`);
+  const signed = result.pipeline_signature;
+  if (signed === 'confirmed') lines.push(`Pipeline signature: valid, by key ${result.pipeline_kid}, confirmed by the pipeline keys you supplied`);
+  if (signed === 'invalid') lines.push('Pipeline signature: NOT VALID against the pipeline keys you supplied');
+  if (signed === 'unconfirmed') lines.push(`Pipeline signature: present (key ${result.pipeline_kid}), not checked`);
+  if (result.evaluated_at) lines.push(`Run time: ${result.evaluated_at}, ${signed === 'confirmed' ? 'as signed by the pipeline' : 'as stated by the file'}`);
   if (result.architecture === 'not-checked' && result.controls.length > 0) {
     lines.push('Note: the control settings were taken from the file itself. Pass --architecture <the reviewed CALM file> to confirm that no setting was changed and no control left out.');
+  }
+  if (signed === 'unconfirmed') {
+    lines.push("Note: the file carries a pipeline signature that was not checked. Pass --pipeline-keys <file or URL> with the pipeline's public keys to confirm it.");
+  }
+  if (signed === 'absent') {
+    lines.push('Note: the file is not signed by the pipeline, so the time of the run is its own statement. Sign it with check --sign-key.');
   }
   if (!result.trusted_keys_supplied && result.controls.some((c) => c.kid)) {
     lines.push('Note: the signing keys were taken from the file itself. Pass --trust-keys <file or URL> to confirm them against a source you trust.');
   }
   lines.push('');
   const confirmed = result.architecture === 'matches' && result.trusted_keys_supplied;
-  const okLine = confirmed
+  const okLine = confirmed && signed === 'confirmed'
+    ? 'Audit: OK. The pipeline signed this file, and every decision is supported by the signed evidence, under the controls of the reviewed architecture and keys you supplied.'
+    : confirmed
     ? 'Audit: OK. Every decision is supported by the signed evidence, under the controls of the reviewed architecture and keys you supplied.'
     : 'Audit: OK. Every recorded decision is supported by the signed evidence in the file. See the notes above for what was not confirmed.';
   lines.push(result.ok ? okLine : `Audit: FAILED.\n${result.problems.map((p) => `  - ${p}`).join('\n')}`);

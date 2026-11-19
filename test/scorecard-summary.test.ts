@@ -44,6 +44,24 @@ test('text from the result cannot break out of its table cell', () => {
   assert.equal(row, '| A \\| B | 5 / 10 | line one line two \\| img src=x code \\\\ |');
 });
 
+test('findings are listed for checks below 10, and capped', () => {
+  const out = run({
+    score: 5,
+    checks: [
+      { name: 'Vulnerabilities', score: 9, reason: '1 existing vulnerabilities detected', details: ['Warn: Project is vulnerable to: GHSA-xxxx-yyyy-zzzz'] },
+      { name: 'License', score: 10, reason: 'license file detected', details: ['Info: project has a license file'] },
+      { name: 'Pinned-Dependencies', score: 2, reason: 'not pinned', details: Array.from({ length: 20 }, (_, i) => `Warn: line ${i} | <b>`) },
+      { name: 'Fuzzing', score: 0, reason: 'project is not fuzzed', details: null },
+    ],
+  });
+  assert.equal(out.status, 0, out.stderr);
+  assert.match(out.stdout, /\*\*Vulnerabilities\*\*\n\n- Warn: Project is vulnerable to: GHSA-xxxx-yyyy-zzzz\n/);
+  assert.doesNotMatch(out.stdout, /project has a license file/);
+  assert.doesNotMatch(out.stdout, /\*\*Fuzzing\*\*/);
+  assert.match(out.stdout, /- Warn: line 11 \\\| b\n- and 8 more in the artifact/);
+  assert.doesNotMatch(out.stdout, /line 12/);
+});
+
 test('a file that is not a Scorecard result is an error', () => {
   assert.equal(run({ error: 'rate limited' }).status, 1);
   assert.equal(run('not json').status, 1);

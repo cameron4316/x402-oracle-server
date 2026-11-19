@@ -36,6 +36,15 @@ const cell = (value) =>
 // Scorecard uses -1 for "could not be determined".
 const score = (n) => (typeof n === 'number' && n >= 0 ? `${n} / 10` : 'not determined');
 
+// What Scorecard found, for each check that is not at 10, so the reason can be read here without
+// downloading the artifact. Capped, because some checks list one line per file.
+const MAX_FINDINGS = 12;
+function findings(check) {
+  const shown = check.details.slice(0, MAX_FINDINGS).map((d) => `- ${cell(d)}`);
+  const more = check.details.length - shown.length;
+  return [`**${cell(check.name)}**`, '', ...shown, ...(more > 0 ? [`- and ${more} more in the artifact`] : []), ''];
+}
+
 const checks = [...result.checks].sort((a, b) => String(a.name).localeCompare(String(b.name)));
 const lines = [
   '## OpenSSF Scorecard',
@@ -48,6 +57,7 @@ const lines = [
   '|---|---|---|',
   ...checks.map((c) => `| ${cell(c.name)} | ${score(c.score)} | ${cell(c.reason)} |`),
   '',
+  ...checks.filter((c) => c.score !== 10 && Array.isArray(c.details) && c.details.length > 0).flatMap(findings),
   'Informational: this result is not published and does not fail the job.',
 ];
 console.log(lines.join('\n'));

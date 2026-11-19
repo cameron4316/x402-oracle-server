@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "name": "Open Source Project Security Baseline",
+    "version": "2026.08.28",
+    "level": 1,
+    "repository": "https://github.com/ossf/security-baseline",
+    "commit": "c62696c17f4086bb1aed51cfa594dee00e9d8a91",
+    "path": "docs/versions/2026-08-28-checklist.md",
+    "published": "https://baseline.openssf.org/versions/2026-08-28"
+  },
+  "requirements": [
+    "OSPS-AC-01.01", "OSPS-AC-02.01", "OSPS-AC-03.01", "OSPS-AC-03.02",
+    "OSPS-BR-01.01", "OSPS-BR-01.03", "OSPS-BR-03.01", "OSPS-BR-03.02", "OSPS-BR-07.01",
+    "OSPS-DO-01.01", "OSPS-DO-02.01",
+    "OSPS-GV-02.01", "OSPS-GV-03.01",
+    "OSPS-LE-02.01", "OSPS-LE-02.02", "OSPS-LE-03.01", "OSPS-LE-03.02",
+    "OSPS-QA-01.01", "OSPS-QA-01.02", "OSPS-QA-02.01", "OSPS-QA-04.01", "OSPS-QA-05.01", "OSPS-QA-05.02",
+    "OSPS-VM-02.01"
+  ]
+}

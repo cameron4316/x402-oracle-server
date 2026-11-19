@@ -89,9 +89,12 @@ function withProjectLinks(text: string): string {
 
 // ---------------------------------------------------------------- style and script (fixed text)
 
+// Colours follow hosannaith.com: near-black, a crimson wordmark, gold accents. System fonts only,
+// because the page loads nothing from anywhere else.
+
 const STYLE = `
-:root { color-scheme: dark; --bg: #1A1229; --panel: #231938; --line: #3D2F58; --ink: #F4EFE6;
-  --soft: #C7BFD6; --gold: #D4AF37; --good: #8FD6A0; --warn: #F0C36A; --bad: #FF9A8B; }
+:root { color-scheme: dark; --bg: #0B0908; --panel: #151210; --line: #332D27; --ink: #F7F3EC;
+  --soft: #BDB3A4; --gold: #D9B44A; --mark: #B8192F; --good: #8FD6A0; --warn: #F0C36A; --bad: #FF9A8B; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink);
   font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -100,10 +103,10 @@ a { color: var(--gold); }
 code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
 .top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap;
   padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-.brand { color: var(--gold); font-weight: 700; letter-spacing: 0.04em; text-decoration: none; font-size: 1.1rem; }
+.brand { color: var(--mark); font-family: Georgia, "Times New Roman", serif; font-weight: 700; text-decoration: none; font-size: 1.5rem; }
 .kind { color: var(--soft); font-size: 0.85rem; letter-spacing: 0.08em; text-transform: uppercase; }
-h1 { font-size: 2rem; line-height: 1.2; margin: 32px 0 8px; }
-h2 { font-size: 1.15rem; margin: 40px 0 12px; color: var(--gold); }
+h1 { font-family: Georgia, "Times New Roman", serif; font-size: 2.2rem; line-height: 1.15; margin: 32px 0 8px; }
+h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.3rem; margin: 40px 0 12px; color: var(--gold); }
 h3 { font-size: 1rem; margin: 0; font-weight: 600; word-break: break-all; }
 p { margin: 0 0 12px; }
 .lede { color: var(--soft); margin-bottom: 24px; }
@@ -140,7 +143,7 @@ footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line);
 @media (max-width: 640px) { h1 { font-size: 1.5rem; } dl.stats { grid-template-columns: repeat(2, 1fr); }
   .head { flex-direction: column; } .score { text-align: left; } }
 @media print { :root { color-scheme: light; --bg: #fff; --panel: #fff; --line: #bbb; --ink: #111; --soft: #444;
-  --gold: #6b5200; --good: #1b6b2f; --warn: #7a5200; --bad: #9b1c1c; } main { padding: 0; } .card { break-inside: avoid; } }
+  --gold: #6b5200; --mark: #B8192F; --good: #1b6b2f; --warn: #7a5200; --bad: #9b1c1c; } main { padding: 0; } .card { break-inside: avoid; } }
 `;
 
 // Runs in the reader's browser. Plain script, no build step, the same text for every report (so one

@@ -59,6 +59,10 @@ function publish(reports: Array<{ id: string }>): string {
 }
 
 const between = (html: string, open: string, close: string) => html.slice(html.indexOf(open) + open.length, html.indexOf(close));
+/** The page without one element, found by plain string position. */
+const without = (html: string, open: string, close: string) => html.slice(0, html.indexOf(open)) + html.slice(html.indexOf(close) + close.length);
+/** True if the text contains any of the given pieces of markup, in any letter case. */
+const hasMarkup = (html: string, ...pieces: string[]) => pieces.some((piece) => html.toLowerCase().includes(piece.toLowerCase()));
 
 test('the published report renders with its figures, and says its signature was checked', async () => {
   const page = await reportPage(PUBLISHED_DIR, 'a-identity-2026-11', PUBLISHED_KEYS);
@@ -135,13 +139,14 @@ test('text from a report cannot become markup', async () => {
   const report = attest(signer, { ...base, method: `${hostile} https://github.com/cameron4316/x402-oracle-server#x"><b>y`, disclaimer: hostile });
   const page = await reportPage(publish([report]), 'hostile-2026-11', keySet);
   assert.ok(page?.verified);
-  const body = page.html.replace(/<script>[\s\S]*<\/script>/, '').replace(/<style>[\s\S]*<\/style>/, '');
-  assert.doesNotMatch(body, /<script|<img|onerror=alert\(2\)>|<b>y/);
+  // Everything except the page's own stylesheet and script.
+  const body = without(without(page.html, '<script>', '</script>'), '<style>', '</style>');
+  assert.equal(hasMarkup(body, '<script', '<img', 'onerror=alert(2)>', '<b>y'), false);
   assert.ok(body.includes('&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;&quot;&#39;&amp;'));
   // A project link is still a link, and stops at the first character that could end the attribute.
   assert.ok(body.includes('<a href="https://github.com/cameron4316/x402-oracle-server#x">'));
   // The index page escapes too.
-  assert.doesNotMatch(await reportIndexPage(publish([report]), keySet), /<script>alert|<img/);
+  assert.equal(hasMarkup(await reportIndexPage(publish([report]), keySet), '<script', '<img'), false);
 });
 
 test('a report that does not verify gets a page with no figures', async () => {
@@ -155,7 +160,7 @@ test('a report that does not verify gets a page with no figures', async () => {
   assert.equal(page.verified, false);
   assert.match(page.html, /Signature not valid\.<\/strong> The signature does not match the contents of the file\./);
   assert.match(page.html, /<meta name="robots" content="noindex">/);
-  assert.doesNotMatch(page.html, /example\.com\/paid|\/ 100|<script/);
+  assert.equal(hasMarkup(page.html, 'example.com/paid', '/ 100', '<script'), false);
 
   const revoked: KeySet = { keys: [], revoked_keys: [{ kid }] };
   const revokedPage = await reportPage(publish([good]), 'example-2026-11', revoked);
@@ -193,7 +198,7 @@ test('the list shows verified reports, newest window first', async () => {
   const html = await reportIndexPage(dir, keySet);
   assert.ok(html.indexOf('href="/reports/newer-2026-11"') > 0);
   assert.ok(html.indexOf('href="/reports/newer-2026-11"') < html.indexOf('href="/reports/older-2026-10"'));
-  assert.doesNotMatch(html, /<script/);
+  assert.equal(hasMarkup(html, '<script'), false);
 });
 
 // ---- the script that runs in the reader's browser

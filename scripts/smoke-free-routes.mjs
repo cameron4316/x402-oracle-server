@@ -122,6 +122,30 @@ await check('GET /reports/no-such-report.json -> 404 Problem Details', async () 
   await expectProblem(await get('/reports/no-such-report.json'), 404);
 });
 
+await check('GET /reports -> a page that lists the published reports', async () => {
+  const res = await get('/reports');
+  expect(res.status === 200, `status ${res.status}`);
+  expect(ctype(res) === 'text/html', `content-type ${ctype(res)}`);
+  expect((await res.text()).includes('href="/reports/a-identity-2026-11"'), 'the A-Identity report is not listed');
+});
+
+await check('GET /reports/a-identity-2026-11 -> the report as a page, signature verified, locked-down CSP', async () => {
+  const res = await get('/reports/a-identity-2026-11');
+  expect(res.status === 200, `status ${res.status}`);
+  expect(ctype(res) === 'text/html', `content-type ${ctype(res)}`);
+  const csp = res.headers.get('content-security-policy') ?? '';
+  expect(csp.startsWith("default-src 'none'") && /script-src 'sha256-[^']+'/.test(csp), `CSP ${csp}`);
+  const html = await res.text();
+  expect(html.includes('Signature valid.'), 'the page does not say the signature is valid');
+  // The page and the signed file must be the same report: the page carries the file's signature.
+  const file = await (await get('/reports/a-identity-2026-11.json')).json();
+  expect(html.includes(`data-sig="${file.signature.sig}"`), 'the page was not built from the signed file');
+});
+
+await check('GET /reports/no-such-report -> 404 Problem Details', async () => {
+  await expectProblem(await get('/reports/no-such-report'), 404);
+});
+
 await check('GET /no-such-route -> 404 Problem Details', async () => {
   await expectProblem(await get('/no-such-route'), 404);
 });

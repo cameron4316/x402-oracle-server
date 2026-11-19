@@ -285,6 +285,12 @@ To report a vulnerability, email security@hosannaith.com or use GitHub's private
 reporting. Please don't open a public issue. Scope and what to expect: [SECURITY.md](SECURITY.md).
 Machine-readable: [`/.well-known/security.txt`](https://api.hosannaith.com/.well-known/security.txt).
 
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to test each part, the
+rules reviews hold to, and the commit sign-off (DCO). Everyone taking part is expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE).

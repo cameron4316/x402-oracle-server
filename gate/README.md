@@ -28,13 +28,15 @@ cd x402-oracle-server/gate
 node demo/demo.ts
 ```
 
-The demo runs five steps and prints each command it uses:
+The demo runs six steps and prints each command it uses:
 
 1. **A good day.** Four outside services are checked. The pipeline passes.
 2. **An audit.** The saved evidence file is re-checked offline. Every decision is recomputed.
 3. **One service degrades.** The same command now fails the pipeline, with the reasons.
 4. **Someone edits the numbers to hide it.** The oracle's signature no longer verifies.
 5. **Someone loosens the rule instead.** The file no longer matches the reviewed architecture.
+6. **Someone shows an earlier, better result.** Nothing is altered, so only the pipeline's own
+   signature on the file gives it away.
 
 Step 3 looks like this:
 
@@ -153,18 +155,22 @@ turn into a pass.
 
 `--evidence-out` saves one JSON file per run. For each control it holds the control as written,
 the signed document exactly as received, the key set it was verified against, every check and the
-decision.
+decision. With `--sign-key` the pipeline signs the whole file.
 
 ```bash
+node src/cli.ts check --architecture architecture.calm.json \
+  --evidence-out evidence.json --sign-key pipeline-key.pem
+
 node src/cli.ts audit evidence.json \
   --architecture architecture.calm.json \
-  --trust-keys ../attest/jwks-history.json
+  --trust-keys ../attest/jwks-history.json \
+  --pipeline-keys pipeline-keys.json
 ```
 
 `audit` recomputes every decision from the signed documents in the file, as of the time recorded
 in it, and compares. It needs no network.
 
-Only the oracle's documents are signed. Everything else in the file is confirmed against something
+The oracle signs its documents and the pipeline signs the file. Each is confirmed against something
 the auditor brings:
 
 | In the file | Protected by |
@@ -173,10 +179,18 @@ the auditor brings:
 | The decisions and checks | Recomputed every time, never read from the file. Flipping "fail" to "pass" is caught even when the file's digest was recomputed. |
 | The control settings, and which controls there are | `--architecture`: the reviewed CALM file. The file must be the one the gate ran on (by SHA-256), every control's settings must be identical, and none may be missing. Without it, someone could loosen a threshold in the file, or drop a failing control, and redo everything that follows. |
 | The signing keys | `--trust-keys`: the oracle's keys from a source you trust. Every key the file relied on must appear there, unrevoked. |
-| The time of the run, and which signed document was presented | Nothing yet. They are the file's own statements. A document dated after the stated run time is refused, but an older genuine document could be presented as the latest. Closing this needs the pipeline to sign the file, which the gate does not do yet. |
+| The time of the run, and which signed document was presented | `--pipeline-keys`: the pipeline's public keys. With `check --sign-key` the pipeline signs the whole file, in the same way the oracles sign theirs. Without that signature these two are the file's own statements: someone could present an older genuine document as the latest and nothing else would show it. |
 
-Without `--architecture` or `--trust-keys` the audit still runs, and says which of the two it could
-not confirm. The digest in the file detects accidental change; it is not a signature.
+Without `--architecture`, `--trust-keys` or `--pipeline-keys` the audit still runs, and says which of
+them it could not confirm. If pipeline keys are supplied and the file is unsigned, the audit fails,
+so a signature cannot simply be stripped. The digest in the file detects accidental change; it is
+not a signature.
+
+**The pipeline's key.** `reliability-gate keygen --private-out key.pem --public-out keys.json` makes
+a P-256 key and the public key set auditors need. Keep the private key in the pipeline's secret
+store: pass it as a file with `--sign-key`, or as PEM text in the `RELIABILITY_GATE_SIGN_KEY`
+environment variable. The signature moves the question from "was the file edited" to "who holds
+the pipeline's key": whoever holds it can sign.
 
 ## Where the evidence comes from
 
@@ -237,6 +251,8 @@ the official CALM CLI, and runs the gate on it.
   with:
     node-version: 24
 - uses: cameron4316/x402-oracle-server/gate@main
+  env:
+    RELIABILITY_GATE_SIGN_KEY: ${{ secrets.RELIABILITY_GATE_SIGN_KEY }}   # optional: signs the evidence
   with:
     architecture: architecture/system.calm.json
     evidence-out: evidence/reliability.json
@@ -256,8 +272,9 @@ the dashboards a team already has.
 Other commands:
 
 ```bash
-node src/cli.ts check --architecture <calm.json> [--evidence-out f] [--metrics-out f] [--verbose]
-node src/cli.ts audit <evidence.json> [--architecture <calm.json>] [--trust-keys <file or URL>]...
+node src/cli.ts check --architecture <calm.json> [--evidence-out f] [--metrics-out f] [--sign-key key.pem] [--verbose]
+node src/cli.ts audit <evidence.json> [--architecture <calm.json>] [--trust-keys <file or URL>]... [--pipeline-keys <file or URL>]...
+node src/cli.ts keygen --private-out <key.pem> --public-out <keys.json>   # the pipeline's signing key
 node src/cli.ts controls --architecture <calm.json>      # list the controls, check nothing
 node src/cli.ts overlay --base <calm.json> --overlay <overlay.json> --out <merged.json>
 ```
@@ -314,9 +331,9 @@ the framework says so.
   about the time is not detected.
 - **Build time, not run time.** The gate stops a pipeline. It does not sit in the path of the
   agent's calls. The metrics output is the bridge to run-time dashboards and alerts.
-- **The evidence file is not signed by the pipeline.** Its settings are confirmed against the
-  reviewed architecture and its keys against a trusted key set, but the time of the run is its own
-  statement. See [the audit section](#the-evidence-file-and-the-audit).
+- **The pipeline's signature is only as good as the custody of its key.** It proves the file is
+  what the key holder produced. Anyone with the key can produce another. An unsigned file leaves
+  the time of the run as its own statement. See [the audit section](#the-evidence-file-and-the-audit).
 - **Behind a proxy**, Node's `fetch` needs `NODE_USE_ENV_PROXY=1` to use the proxy settings in the
   environment. Reading evidence from files avoids the network altogether.
 
@@ -338,7 +355,8 @@ node --test "test/*.test.ts"
 
 The tests run on a bare checkout. They cover the decision logic check by check, the three
 formats against real signed documents, forged evidence files (edited numbers, loosened settings,
-dropped controls), and the command line end to end over real HTTP on the loopback interface.
+dropped controls, replayed documents, stripped and forged pipeline signatures), and the command
+line end to end over real HTTP on the loopback interface.
 
 Apache-2.0, like the rest of this repository.
 

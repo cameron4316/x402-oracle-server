@@ -78,16 +78,21 @@ jobs:
           node gate/mock-oracle/server.ts --port 8787 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8787/ >/dev/null && exit 0; sleep 0.5; done
           echo "mock oracle did not start" >&2; exit 1
+      # A throwaway signing key for this run, standing in for the key a real pipeline keeps as a secret.
+      - name: Make a pipeline signing key
+        run: node gate/src/cli.ts keygen --private-out "$RUNNER_TEMP/pipeline-key.pem" --public-out gate-out/pipeline-keys.json
       - name: Gate
         uses: ./gate
         with:
           architecture: gate/examples/loan-approval/architecture.calm.json
           evidence-out: gate-out/evidence.json
           metrics-out: gate-out/metrics.prom
-      - name: Audit the saved evidence against the architecture in the repository and keys fetched separately
+          sign-key-file: ${{ runner.temp }}/pipeline-key.pem
+      - name: Audit the saved evidence against the architecture in the repository, keys fetched separately and the pipeline's public key
         run: >-
           node gate/src/cli.ts audit gate-out/evidence.json
           --architecture gate/examples/loan-approval/architecture.calm.json
+          --pipeline-keys gate-out/pipeline-keys.json
           --trust-keys attest/jwks-history.json
           --trust-keys http://127.0.0.1:8787/.well-known/keys.json
       - uses: actions/upload-artifact@v4

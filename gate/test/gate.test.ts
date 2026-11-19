@@ -14,8 +14,8 @@ import { parseControlConfig } from '../src/control.ts';
 import { evaluate } from '../src/evaluate.ts';
 import { auditBundle, runGate, sha256Hex, type Bundle } from '../src/evidence.ts';
 import { renderMetrics } from '../src/metrics.ts';
-import { renderMarkdown, renderText } from '../src/report.ts';
-import { controlConfig } from './helpers.ts';
+import { renderAudit, renderMarkdown, renderText } from '../src/report.ts';
+import { controlConfig, makeOracle } from './helpers.ts';
 
 const CLI = fileURLToPath(new URL('../src/cli.ts', import.meta.url));
 const BUREAU = 'https://credit-bureau.example/v1/score';
@@ -61,7 +61,8 @@ const cli = (args: string[]): Promise<{ code: number; stdout: string; stderr: st
   });
 
 const reDigest = (bundle: Bundle): Bundle => {
-  const { digest: _digest, ...unsigned } = bundle;
+  // The digest covers everything except itself and the pipeline's signature.
+  const { digest: _digest, signature: _signature, ...unsigned } = bundle;
   return { ...bundle, digest: { ...bundle.digest, value: createHash('sha256').update(canonicalize(unsigned)).digest('hex') } };
 };
 
@@ -288,6 +289,151 @@ test('editing the control settings in an evidence file is caught against the rev
   assert.equal(withArchitecture.code, 1);
   assert.match(withArchitecture.stdout, /DIFFERS from the reviewed architecture/);
   assert.equal((await cli(['audit', evidence, '--architecture', join(dir, 'missing.json')])).code, 2);
+});
+
+/** Redo every control in a file as of a (possibly changed) time, the way a careful forger would. */
+function redo(bundle: Bundle): Bundle {
+  const forged = structuredClone(bundle);
+  for (const record of forged.controls) {
+    const parsed = parseControlConfig(record.config);
+    if (!parsed.ok || !record.evidence || !record.keys) continue;
+    const result = evaluate({
+      spec: parsed.spec,
+      document: { ok: true, value: record.evidence.document },
+      keySet: { ok: true, value: record.keys.key_set },
+      now: new Date(forged.evaluated_at),
+    });
+    Object.assign(record, { decision: result.decision, checks: result.checks, measurement: result.measurement });
+  }
+  const count = (d: string): number => forged.controls.filter((c) => c.decision === d).length;
+  forged.summary = { controls: forged.controls.length, pass: count('pass'), fail: count('fail'), warn: count('warn'), invalid: count('invalid') };
+  forged.result = forged.summary.fail + forged.summary.invalid > 0 ? 'fail' : 'pass';
+  return reDigest(forged);
+}
+
+test('a file signed by the pipeline: the run time and the documents presented cannot be changed', async () => {
+  const pipeline = makeOracle();
+  const architecture = writeArchitecture('signed.json', [node('employment', mockControl(EMPLOYMENT))]);
+
+  oracle.setScenario(loadScenario('healthy'));
+  const earlier = await runGate(architecture, { now: new Date(), clock: 'system', signer: pipeline.signer });
+  assert.equal(earlier.result, 'pass');
+  assert.equal(earlier.signature?.kid, pipeline.kid);
+
+  oracle.setScenario(loadScenario('degraded'));
+  const bundle = await runGate(architecture, { now: new Date(), clock: 'system', signer: pipeline.signer });
+  assert.equal(bundle.result, 'fail');
+
+  // Signed and confirmed.
+  const confirmed = auditBundle(JSON.parse(JSON.stringify(bundle)), [], null, [pipeline.keySet]);
+  assert.equal(confirmed.ok, true, confirmed.problems.join('; '));
+  assert.equal(confirmed.pipeline_signature, 'confirmed');
+  assert.equal(confirmed.pipeline_kid, pipeline.kid);
+  // Signed, but the auditor brought no pipeline keys: said, not assumed.
+  assert.equal(auditBundle(bundle).pipeline_signature, 'unconfirmed');
+  assert.match(renderAudit(auditBundle(bundle)), /pipeline signature that was not checked/);
+  assert.match(renderAudit(confirmed), /Run time: .*as signed by the pipeline/);
+
+  // Forgery 1: present the document from the earlier, healthy run as if it were this run's.
+  // Everything in the file is then genuine and self-consistent. Only the pipeline's signature knows.
+  const replay = structuredClone(bundle);
+  replay.controls[0]!.evidence!.document = structuredClone(earlier.controls[0]!.evidence!.document);
+  replay.evaluated_at = earlier.evaluated_at;
+  const replayed = redo(replay);
+  assert.equal(replayed.result, 'pass');
+  const reviewed = { sha256: bundle.architecture.sha256, document: JSON.parse(readFileSync(architecture, 'utf8')) };
+  const keys = await (await fetch(`${oracle.url}/.well-known/keys.json`)).json();
+  const withoutPipelineKeys = auditBundle(replayed, [keys], reviewed);
+  assert.equal(withoutPipelineKeys.ok, true, withoutPipelineKeys.problems.join('; '));
+  assert.equal(withoutPipelineKeys.pipeline_signature, 'unconfirmed');
+  const caught = auditBundle(replayed, [keys], reviewed, [pipeline.keySet]);
+  assert.equal(caught.ok, false);
+  assert.equal(caught.pipeline_signature, 'invalid');
+  assert.match(caught.problems.join('\n'), /the pipeline signature does not verify \(signature_invalid\)/);
+
+  // Forgery 2: only the stated time of the run is moved.
+  const moved = structuredClone(bundle);
+  moved.evaluated_at = new Date(Date.parse(bundle.evaluated_at) + 60_000).toISOString();
+  assert.equal(auditBundle(redo(moved)).ok, true);
+  assert.equal(auditBundle(redo(moved), [], null, [pipeline.keySet]).ok, false);
+
+  // Forgery 3: strip the signature and hope nobody asks for it.
+  const { signature: _signature, ...stripped } = replayed;
+  assert.equal(auditBundle(stripped).pipeline_signature, 'absent');
+  const strippedChecked = auditBundle(stripped, [], null, [pipeline.keySet]);
+  assert.equal(strippedChecked.ok, false);
+  assert.match(strippedChecked.problems.join('\n'), /not signed by the pipeline, but pipeline keys were supplied/);
+
+  // Forgery 4: re-sign with a key of the forger's own.
+  const forger = makeOracle();
+  const { signature: _old, ...unsignedReplay } = replayed;
+  const resigned = { ...unsignedReplay, signature: forger.signer.sign(unsignedReplay) } as Bundle;
+  assert.equal(auditBundle(resigned, [], null, [forger.keySet]).pipeline_signature, 'confirmed');
+  assert.match(auditBundle(resigned, [], null, [pipeline.keySet]).problems.join('\n'), /unknown_kid/);
+
+  // A revoked pipeline key, and a key that was not yet in use at the stated time.
+  assert.match(auditBundle(bundle, [], null, [{ keys: [], revoked_keys: [{ kid: pipeline.kid }] }]).problems.join('\n'), /revoked_kid/);
+  const later = { keys: [{ ...pipeline.keySet.keys[0], activated_at: new Date(Date.now() + 3600_000).toISOString() }] };
+  assert.match(auditBundle(bundle, [], null, [later]).problems.join('\n'), /outside the life of the pipeline key/);
+  assert.match(auditBundle(bundle, [], null, ['nope']).problems.join('\n'), /pipeline key set is not/);
+  // Any one of several supplied key sets may hold the key.
+  assert.equal(auditBundle(bundle, [], null, [forger.keySet, pipeline.keySet]).ok, true);
+});
+
+test('the command line: making a pipeline key, signing with it, and auditing against it', async () => {
+  oracle.setScenario(loadScenario('healthy'));
+  const architecture = writeArchitecture('cli-signed.json', [node('bureau', mockControl(BUREAU))]);
+  const keyFile = join(dir, 'keys', 'pipeline.pem');
+  const publicFile = join(dir, 'keys', 'pipeline-keys.json');
+  const made = await cli(['keygen', '--private-out', keyFile, '--public-out', publicFile]);
+  assert.equal(made.code, 0, made.stderr);
+  assert.match(readFileSync(keyFile, 'utf8'), /^-----BEGIN PRIVATE KEY-----/);
+  const published = JSON.parse(readFileSync(publicFile, 'utf8'));
+  assert.equal(published.keys.length, 1);
+  assert.equal('d' in published.keys[0], false, 'the public key set must not contain the private part');
+  assert.doesNotMatch(made.stdout + made.stderr, /BEGIN PRIVATE KEY/);
+  // An existing key is never overwritten.
+  const again = await cli(['keygen', '--private-out', keyFile, '--public-out', publicFile]);
+  assert.equal(again.code, 2);
+  assert.match(again.stderr, /never overwritten/);
+
+  const evidence = join(dir, 'keys', 'signed-evidence.json');
+  const signed = await cli(['check', '-a', architecture, '--evidence-out', evidence, '--sign-key', keyFile]);
+  assert.equal(signed.code, 0, signed.stdout + signed.stderr);
+  assert.match(signed.stdout, new RegExp(`signed by pipeline key ${published.keys[0].kid}`));
+  const audit = await cli(['audit', evidence, '--architecture', architecture, '--trust-keys', `${oracle.url}/.well-known/keys.json`, '--pipeline-keys', publicFile]);
+  assert.equal(audit.code, 0, audit.stdout + audit.stderr);
+  assert.match(audit.stdout, /Pipeline signature: valid/);
+  assert.match(audit.stdout, /Audit: OK\. The pipeline signed this file/);
+
+  // The same key from the environment, as a pipeline secret would arrive.
+  const fromEnv = await new Promise<{ code: number; stdout: string }>((resolve) => {
+    execFile(process.execPath, [CLI, 'check', '-a', architecture, '--format', 'json'], { env: { ...process.env, GITHUB_STEP_SUMMARY: '', RELIABILITY_GATE_SIGN_KEY: readFileSync(keyFile, 'utf8') } }, (err, stdout) =>
+      resolve({ code: err ? 1 : 0, stdout }),
+    );
+  });
+  assert.equal(JSON.parse(fromEnv.stdout).signature.kid, published.keys[0].kid);
+
+  // One changed character anywhere in a signed file.
+  const tampered = join(dir, 'keys', 'signed-tampered.json');
+  writeFileSync(tampered, readFileSync(evidence, 'utf8').replace('"clock": "system"', '"clock": "pinned"'));
+  const bad = await cli(['audit', tampered, '--pipeline-keys', publicFile]);
+  assert.equal(bad.code, 1);
+  assert.match(bad.stdout, /Pipeline signature: NOT VALID/);
+
+  // An unsigned file, when the auditor expects a signed one.
+  const unsigned = join(dir, 'keys', 'unsigned-evidence.json');
+  assert.equal((await cli(['check', '-a', architecture, '--evidence-out', unsigned])).code, 0);
+  assert.match((await cli(['audit', unsigned])).stdout, /not signed by the pipeline, so the time of the run is its own statement/);
+  assert.equal((await cli(['audit', unsigned, '--pipeline-keys', publicFile])).code, 1);
+
+  // A key that is not a P-256 private key is refused without echoing it.
+  const notAKey = join(dir, 'keys', 'not-a-key.pem');
+  writeFileSync(notAKey, 'super secret text that must not be printed');
+  const refused = await cli(['check', '-a', architecture, '--sign-key', notAKey]);
+  assert.equal(refused.code, 2);
+  assert.doesNotMatch(refused.stdout + refused.stderr, /super secret/);
+  assert.equal((await cli(['check', '-a', architecture, '--sign-key', join(dir, 'keys', 'missing.pem')])).code, 2);
 });
 
 test('the command line: exit codes, files written, and the audit command', async () => {

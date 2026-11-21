@@ -1,0 +1,59 @@
+name: OpenSSF Scorecard
+
+# Runs the OpenSSF Scorecard checks (https://github.com/ossf/scorecard) against this repository:
+# branch protection, pinned dependencies, token permissions, dangerous workflow patterns and so on.
+#
+# Informational. The job fails only if Scorecard itself cannot run; a low score does not fail it.
+# The result is written to the job summary and kept as a workflow artifact. It is NOT published to
+# the Scorecard service (publish_results: false), and it is not uploaded to code scanning, so it
+# raises no alerts. Turning either on is a decision for the maintainer.
+#
+# Read-only: no secrets beyond the default token.
+on:
+  # Scorecard's support for pull_request is experimental; it is here only so that a change to this
+  # workflow is tried before it reaches main.
+  pull_request:
+    paths:
+      - .github/workflows/scorecard.yml
+      - scripts/scorecard-summary.mjs
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 15 * * 2' # Tuesdays 15:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scorecard:
+    name: Scorecard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@23f22cd43608bae7a1f1fa2603d7314dee9538a5 # v2.6.0
+        with:
+          results_file: scorecard.json
+          results_format: json
+          publish_results: false
+
+      - name: Summary
+        run: node scripts/scorecard-summary.mjs scorecard.json | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scorecard
+          path: scorecard.json
+          if-no-files-found: error
+          retention-days: 90

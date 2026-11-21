@@ -285,6 +285,9 @@ To report a vulnerability, email security@hosannaith.com or use GitHub's private
 reporting. Please don't open a public issue. Scope and what to expect: [SECURITY.md](SECURITY.md).
 Machine-readable: [`/.well-known/security.txt`](https://api.hosannaith.com/.well-known/security.txt).
 
+How the project is run is checked against the OpenSSF Security Baseline, Level 1, requirement by
+requirement: [`docs/osps-baseline.md`](docs/osps-baseline.md). It is a self-assessment.
+
 ## Contributing
 
 Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers how to test each part, the

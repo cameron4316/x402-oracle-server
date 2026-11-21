@@ -12,6 +12,17 @@ this guide is short and the process is simple.
 - **A suspected vulnerability**: do not open an issue or a pull request. Follow
   [SECURITY.md](SECURITY.md).
 
+## Reporting a problem
+
+Open an issue at <https://github.com/cameron4316/x402-oracle-server/issues>. It helps to say:
+
+- what you did (the request, the command, or the package and version)
+- what you expected, and what happened instead
+- for a score or a report you think is wrong: the target URL, the time, and the `kid` of the
+  signature if there is one
+
+For a suspected vulnerability, do not open an issue. Follow [SECURITY.md](SECURITY.md).
+
 ## What is in this repository
 
 | Folder | What it is | How to test it |
@@ -20,7 +31,7 @@ this guide is short and the process is simple.
 | `sdk/typescript/` | `hosannaith-client`, the client package | `pnpm install --frozen-lockfile`, then `pnpm typecheck` and `pnpm test` in that folder |
 | `mcp/` | `hosannaith-mcp`, the local MCP server | `pnpm install --ignore-workspace --no-frozen-lockfile` and `pnpm build` in that folder |
 | `gate/` | Elenchos, the reliability gate | `node --test "gate/test/*.test.ts"` (nothing to install) |
-| `calm/`, `docs/` | The architecture model and the framework mapping | `node scripts/check-aigf-ids.mjs` |
+| `calm/`, `docs/` | The architecture model, the framework mapping and the security baseline self-assessment | `node scripts/check-aigf-ids.mjs` and `node scripts/check-osps-baseline.mjs` |
 
 You need Node 22 or later and [pnpm](https://pnpm.io). Production runs on Node 24, and CI tests
 both. Every pull request runs the full set of checks; you do not need to run all of them locally.

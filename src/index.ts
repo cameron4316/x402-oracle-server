@@ -210,7 +210,8 @@ app.get('/reports/:id{[a-z0-9-]+}', async (c) => {
   const id = c.req.param('id');
   const page = await reportPage(PUBLIC_REPORTS_DIR, id, publishedKeys);
   if (!page) return problemResponse(c, 404, `No report named ${id}`);
-  return c.body(page.html, 200, REPORT_PAGE_HEADERS);
+  // 500 when the report's signature did not verify: the page says so and shows no figures.
+  return c.body(page.html, page.status, page.headers);
 });
 
 // --- Machine-readable contract (free, unpaid): OpenAPI 3.1 + JSON Schemas of every response shape ---

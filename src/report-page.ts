@@ -111,7 +111,7 @@ h3 { font-size: 1rem; margin: 0; font-weight: 600; word-break: break-all; }
 p { margin: 0 0 12px; }
 .lede { color: var(--soft); margin-bottom: 24px; }
 .soft { color: var(--soft); }
-.sig { border: 1px solid var(--gold); border-radius: 10px; padding: 16px 20px; background: var(--panel); }
+.sig { border: 1px solid var(--gold); border-radius: 10px; padding: 16px 20px; background: var(--panel); margin-bottom: 24px; }
 .sig[data-state="bad"], .sig[data-browser="bad"] { border-color: var(--bad); }
 .sig strong { font-size: 1.05rem; }
 .sig .ok { color: var(--good); }
@@ -210,12 +210,46 @@ export const VERIFY_SCRIPT = String.raw`
     return { state: ok ? "valid" : "invalid", kid: kid };
   }
 
-  if (typeof document === "undefined") { globalThis.__hosannaithVerifyReport = verifyReport; return; }
+  // What the page says for each result of the browser's check. mark: ok | bad | none.
+  // "bad" means the browser's check and the server's disagree: the headline must stop saying
+  // "valid", and the figures are hidden, because one box must not say two opposite things.
+  function verdict(state, sameFile) {
+    if (state === "valid" && !sameFile) {
+      return { mark: "none", text: "The signed file has changed since this page was built. Reload the page." };
+    }
+    if (state === "valid") {
+      return { mark: "ok", text: "Checked again in your browser: the signature on the signed file is valid for Hosannaith's published key." };
+    }
+    var why = "the signature does not match the signed file";
+    if (state === "revoked") why = "the key that signed this report has been revoked";
+    if (state === "unknown_key") why = "the signing key is not among Hosannaith's published keys";
+    if (state === "malformed") why = "the signed file carries no signature in a form that can be checked";
+    return {
+      mark: "bad",
+      headline: "The two checks disagree.",
+      text: "Your browser's check failed: " + why + ". The figures are hidden, because they cannot be relied on.",
+    };
+  }
+
+  if (typeof document === "undefined") {
+    globalThis.__hosannaithVerifyReport = verifyReport;
+    globalThis.__hosannaithVerdict = verdict;
+    return;
+  }
 
   var box = document.getElementById("sig");
   var note = document.getElementById("sig-browser");
   if (!box || !note || !box.getAttribute("data-report")) return;
-  function say(state, text) { box.setAttribute("data-browser", state); note.textContent = text; }
+  function show(v) {
+    box.setAttribute("data-browser", v.mark);
+    note.textContent = v.text;
+    if (v.mark !== "bad") return;
+    var headline = document.getElementById("sig-headline");
+    if (headline) { headline.textContent = v.headline; headline.className = "no"; }
+    var figures = document.querySelectorAll("[data-figures]");
+    for (var i = 0; i < figures.length; i++) figures[i].hidden = true;
+  }
+  function say(mark, text) { show({ mark: mark, text: text }); }
   if (!window.crypto || !window.crypto.subtle || !window.fetch) {
     say("none", "This browser cannot check signatures, so the line above is the server's check only.");
     return;
@@ -231,18 +265,8 @@ export const VERIFY_SCRIPT = String.raw`
   Promise.all([getJson(file), getJson("/.well-known/hosannaith-keys.json")])
     .then(function (got) {
       return verifyReport(got[0], got[1], window.crypto.subtle).then(function (result) {
-        var same = got[0] && got[0].signature && got[0].signature.sig === box.getAttribute("data-sig");
-        if (result.state === "valid" && !same) {
-          say("none", "The signed file has changed since this page was built. Reload the page.");
-        } else if (result.state === "valid") {
-          say("ok", "Checked again in your browser: the signature on the signed file is valid for Hosannaith's published key.");
-        } else if (result.state === "revoked") {
-          say("bad", "Your browser's check: the key that signed this report has been revoked. Do not rely on this page.");
-        } else if (result.state === "unknown_key") {
-          say("bad", "Your browser's check: the signing key is not among Hosannaith's published keys. Do not rely on this page.");
-        } else {
-          say("bad", "Your browser's check failed: the signature does not match the signed file. Do not rely on this page.");
-        }
+        var same = !!(got[0] && got[0].signature && got[0].signature.sig === box.getAttribute("data-sig"));
+        show(verdict(result.state, same));
       });
     })
     .catch(function () {
@@ -271,6 +295,13 @@ export const REPORT_PAGE_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'no-referrer',
 };
 
+/** For a report that did not verify: never cached, never indexed. */
+export const UNVERIFIED_PAGE_HEADERS: Record<string, string> = {
+  ...REPORT_PAGE_HEADERS,
+  'Cache-Control': 'no-store',
+  'X-Robots-Tag': 'noindex',
+};
+
 // ---------------------------------------------------------------- page parts
 
 function shell(opts: { title: string; description: string; path: string; index: boolean; body: string; script: boolean }): string {
@@ -285,6 +316,7 @@ ${opts.index ? '' : '<meta name="robots" content="noindex">\n'}<meta property="o
 <meta property="og:title" content="${esc(opts.title)}">
 <meta property="og:description" content="${esc(opts.description)}">
 <meta property="og:image" content="${API_URL}/og-image.png">
+<link rel="canonical" href="${esc(API_URL + opts.path)}">
 <meta property="og:url" content="${esc(API_URL + opts.path)}">
 <meta property="og:type" content="article">
 <style>${STYLE}</style>
@@ -295,7 +327,8 @@ ${opts.index ? '' : '<meta name="robots" content="noindex">\n'}<meta property="o
 ${opts.body}
 <footer>
 <p>Published by Hosannaith, an independent reliability oracle for x402 endpoints. <a href="${SITE_URL}">hosannaith.com</a></p>
-<p>Run an x402 endpoint and want a report on yours? Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
+<p>A report about a named operator is published with that operator's agreement, and the operator may choose which of its endpoints it covers. The operator cannot change the figures. Every endpoint is measured by the same probes and the same method.</p>
+<p>Run an x402 endpoint? Yours can be measured the same way. Write to <a href="mailto:${CONTACT}">${CONTACT}</a>.</p>
 </footer>
 </main>
 ${opts.script ? `<script>${VERIFY_SCRIPT}</script>\n` : ''}</body>
@@ -381,12 +414,13 @@ export function renderReportPage(report: Json, kid: string): string {
   const signature = isObject(report.signature) ? report.signature : {};
   const endpoints = list(report.endpoints).filter(isObject);
   const body = `<h1>${esc(title)}</h1>
-<p class="lede">${esc(summary)}</p>
+<p class="lede" data-figures>${esc(summary)}</p>
 <section class="sig" id="sig" data-state="ok" data-report="${esc(id)}" data-sig="${esc(str(signature.sig))}" aria-live="polite">
-<p><strong class="ok">Signature valid.</strong> Signed by Hosannaith on ${esc(when(report.generated_at))} with key <code title="${esc(kid)}">${esc(shortKid(kid))}</code>. This server checked it when it built this page.</p>
+<p><strong class="ok" id="sig-headline">Signature valid.</strong> Signed by Hosannaith on ${esc(when(report.generated_at))} with key <code title="${esc(kid)}">${esc(shortKid(kid))}</code>. This server checked it when it built this page.</p>
 <p class="soft" id="sig-browser"></p>
 <p class="links"><a href="/reports/${esc(id)}.json">The signed file (JSON)</a><a href="${KEYS_PATH}">Published keys</a><a href="${VERIFY_URL}">Check it yourself</a></p>
 </section>
+<div data-figures>
 <h2>What this report covers</h2>
 <p>${esc(str(report.scope, 'The report does not state its scope.'))}</p>
 <h2>Endpoints</h2>
@@ -395,7 +429,9 @@ ${endpoints.map(endpointCard).join('\n')}
 <p class="soft">${withProjectLinks(str(report.method, 'The report does not state its method.'))}</p>
 <h2>What this report is not</h2>
 <p class="soft">${esc(str(report.disclaimer))}</p>
-<p class="soft">The figures above are those in the signed file. A report is never edited after it is published; a newer report gets a new address. <a href="/reports">All reports</a></p>`;
+<p class="soft">The figures above are those in the signed file. A report is never edited after it is published; a newer report gets a new address.</p>
+</div>
+<p class="soft"><a href="/reports">All reports</a></p>`;
   return shell({
     title,
     description: `Signed by Hosannaith. ${summary}`,
@@ -470,18 +506,38 @@ async function load(dir: string, id: string, keySet: KeySet): Promise<Loaded | n
   return { report, outcome: verifyAttestation(report, keySet) };
 }
 
-/** GET /reports/<id>. Null means there is no such report (the caller answers 404). */
-export async function reportPage(dir: string, id: string, keySet: KeySet): Promise<{ html: string; verified: boolean } | null> {
+/** One line per failing report per process, so a revoked key does not flood the log. */
+const reported = new Set<string>();
+function reportFailure(id: string, reason: string, log: (line: string) => void): void {
+  const key = `${id}:${reason}`;
+  if (reported.has(key)) return;
+  reported.add(key);
+  log(`[reports] ${id}.json failed its signature check (${reason}). Its page shows no figures and answers 500, and it is left off the list.`);
+}
+
+export type ReportPageResult = { html: string; status: 200 | 500; headers: Record<string, string>; verified: boolean };
+
+/**
+ * GET /reports/<id>. Null means there is no such report (the caller answers 404).
+ * A published report that does not verify means something is wrong on the server (an edited file,
+ * or a revoked key), so it answers 500 with a page that says so, and logs once.
+ */
+export async function reportPage(
+  dir: string,
+  id: string,
+  keySet: KeySet,
+  log: (line: string) => void = console.error,
+): Promise<ReportPageResult | null> {
   const loaded = await load(dir, id, keySet);
   if (!loaded) return null;
   const { report, outcome } = loaded;
-  return outcome.ok
-    ? { html: renderReportPage(report, outcome.kid), verified: true }
-    : { html: renderUnverifiedPage(id, outcome.reason), verified: false };
+  if (outcome.ok) return { html: renderReportPage(report, outcome.kid), status: 200, headers: REPORT_PAGE_HEADERS, verified: true };
+  reportFailure(id, outcome.reason, log);
+  return { html: renderUnverifiedPage(id, outcome.reason), status: 500, headers: UNVERIFIED_PAGE_HEADERS, verified: false };
 }
 
-/** GET /reports. Newest window first. */
-export async function reportIndexPage(dir: string, keySet: KeySet): Promise<string> {
+/** GET /reports. Newest window first. Reports that do not verify are left off, and logged. */
+export async function reportIndexPage(dir: string, keySet: KeySet, log: (line: string) => void = console.error): Promise<string> {
   let files: string[] = [];
   try {
     files = await readdir(dir);
@@ -489,8 +545,12 @@ export async function reportIndexPage(dir: string, keySet: KeySet): Promise<stri
     // no directory: an empty list
   }
   const ids = files.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -'.json'.length));
-  const loaded = (await Promise.all(ids.map((id) => load(dir, id, keySet)))).filter((l): l is Loaded => !!l && l.outcome.ok);
+  const loaded = (await Promise.all(ids.map((id) => load(dir, id, keySet)))).filter((l): l is Loaded => !!l);
+  for (const l of loaded) if (!l.outcome.ok) reportFailure(str(l.report.id), l.outcome.reason, log);
   const end = (r: Json) => (isObject(r.window) ? str(r.window.to) : '');
-  const reports = loaded.map((l) => l.report).sort((a, b) => end(b).localeCompare(end(a)));
+  const reports = loaded
+    .filter((l) => l.outcome.ok)
+    .map((l) => l.report)
+    .sort((x, y) => end(y).localeCompare(end(x)));
   return renderIndexPage(reports);
 }

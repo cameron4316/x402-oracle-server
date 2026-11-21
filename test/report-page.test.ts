@@ -13,7 +13,7 @@ import { attest, createSigner } from '../src/attest/sign.js';
 import { publicJwk, thumbprint } from '../src/attest/keys.js';
 import { verifyAttestation, type KeySet } from '../src/attest/verify.js';
 import { loadKeyHistory, publishedKeySet } from '../src/attest/keyset.js';
-import { REPORT_PAGE_HEADERS, VERIFY_SCRIPT, reportIndexPage, reportPage } from '../src/report-page.js';
+import { REPORT_PAGE_HEADERS, UNVERIFIED_PAGE_HEADERS, VERIFY_SCRIPT, reportIndexPage, reportPage } from '../src/report-page.js';
 
 const PUBLISHED_DIR = fileURLToPath(new URL('../public-reports/', import.meta.url));
 const PUBLISHED_KEYS = publishedKeySet(loadKeyHistory());
@@ -68,6 +68,14 @@ test('the published report renders with its figures, and says its signature was 
   const page = await reportPage(PUBLISHED_DIR, 'a-identity-2026-11', PUBLISHED_KEYS);
   assert.ok(page);
   assert.equal(page.verified, true);
+  assert.equal(page.status, 200);
+  assert.equal(page.headers, REPORT_PAGE_HEADERS);
+  assert.ok(page.html.includes('<link rel="canonical" href="https://api.hosannaith.com/reports/a-identity-2026-11">'));
+  // What the browser's script changes when its check fails: the headline, and everything marked as figures.
+  assert.ok(page.html.includes('<strong class="ok" id="sig-headline">Signature valid.</strong>'));
+  assert.equal(page.html.split(' data-figures>').length, 3, 'the summary line and the body are both marked as figures');
+  // The terms a report is published on are stated on the page.
+  assert.match(page.html, /published with that operator's agreement.*The operator cannot change the figures\./);
   const report = JSON.parse(readFileSync(PUBLISHED_DIR + 'a-identity-2026-11.json', 'utf8'));
   assert.match(page.html, /<h1>Reliability report: A-Identity<\/h1>/);
   assert.match(page.html, /Signature valid\./);
@@ -155,25 +163,38 @@ test('a report that does not verify gets a page with no figures', async () => {
 
   const edited = structuredClone(good) as typeof good;
   edited.endpoints[0].score = 100;
-  const page = await reportPage(publish([edited]), 'example-2026-11', keySet);
+  const logged: string[] = [];
+  const log = (line: string) => logged.push(line);
+  const editedDir = publish([edited]);
+  const page = await reportPage(editedDir, 'example-2026-11', keySet, log);
   assert.ok(page);
   assert.equal(page.verified, false);
+  // Something is wrong on the server, so: not a 200, never cached, never indexed, and the operator is told once.
+  assert.equal(page.status, 500);
+  assert.equal(page.headers, UNVERIFIED_PAGE_HEADERS);
+  assert.equal(page.headers['Cache-Control'], 'no-store');
+  assert.equal(page.headers['X-Robots-Tag'], 'noindex');
+  assert.equal(page.headers['Content-Security-Policy'], REPORT_PAGE_HEADERS['Content-Security-Policy']);
+  await reportPage(editedDir, 'example-2026-11', keySet, log);
+  await reportIndexPage(editedDir, keySet, log);
+  assert.equal(logged.length, 1, 'one log line per failing report, not one per request');
+  assert.match(logged[0], /^\[reports\] example-2026-11\.json failed its signature check \(signature_invalid\)/);
   assert.match(page.html, /Signature not valid\.<\/strong> The signature does not match the contents of the file\./);
   assert.match(page.html, /<meta name="robots" content="noindex">/);
   assert.equal(hasMarkup(page.html, 'example.com/paid', '/ 100', '<script'), false);
 
   const revoked: KeySet = { keys: [], revoked_keys: [{ kid }] };
-  const revokedPage = await reportPage(publish([good]), 'example-2026-11', revoked);
+  const revokedPage = await reportPage(publish([good]), 'example-2026-11', revoked, log);
   assert.equal(revokedPage?.verified, false);
   assert.match(revokedPage!.html, /The key that signed the file has been revoked\./);
 
   const other = newKey();
-  const unknown = await reportPage(publish([good]), 'example-2026-11', other.keySet);
+  const unknown = await reportPage(publish([good]), 'example-2026-11', other.keySet, log);
   assert.equal(unknown?.verified, false);
   assert.match(unknown!.html, /not among Hosannaith&#39;s published keys|not among Hosannaith's published keys/);
 
   // The list leaves out anything that does not verify.
-  assert.match(await reportIndexPage(publish([edited]), keySet), /No reports have been published yet\./);
+  assert.match(await reportIndexPage(publish([edited]), keySet, log), /No reports have been published yet\./);
 });
 
 test('there is no page for a name that is not a published report', async () => {
@@ -211,6 +232,33 @@ function browserVerify(): BrowserVerify {
   assert.equal(typeof fn, 'function');
   return fn as BrowserVerify;
 }
+
+test("a failed browser check changes the headline and hides the figures; a passing one does not", () => {
+  browserVerify();
+  const verdict = (globalThis as Record<string, unknown>).__hosannaithVerdict as (state: string, sameFile: boolean) => { mark: string; headline?: string; text: string };
+  assert.deepEqual(verdict('valid', true).mark, 'ok');
+  assert.equal(verdict('valid', true).headline, undefined);
+  // A different, validly signed file: nothing is wrong with either, the page is just old.
+  assert.equal(verdict('valid', false).mark, 'none');
+  const reasons: Record<string, RegExp> = {
+    invalid: /does not match the signed file/,
+    revoked: /has been revoked/,
+    unknown_key: /not among Hosannaith's published keys/,
+    malformed: /no signature in a form that can be checked/,
+  };
+  for (const [state, reason] of Object.entries(reasons)) {
+    for (const same of [true, false]) {
+      const v = verdict(state, same);
+      assert.equal(v.mark, 'bad', state);
+      assert.equal(v.headline, 'The two checks disagree.', state);
+      assert.match(v.text, reason, state);
+      assert.match(v.text, /The figures are hidden/, state);
+    }
+  }
+  // The script acts on that verdict: new headline text and class, and every figures block hidden.
+  assert.ok(VERIFY_SCRIPT.includes('headline.textContent = v.headline; headline.className = "no";'));
+  assert.ok(VERIFY_SCRIPT.includes('document.querySelectorAll("[data-figures]")'));
+});
 
 test("the browser's check agrees with the server's on the published report", async () => {
   const verify = browserVerify();

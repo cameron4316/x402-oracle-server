@@ -199,7 +199,8 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
           tags: ['Discovery'],
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }],
           responses: {
-            '200': { description: 'The report, or a notice that its signature did not verify.', content: { 'text/html': {} } },
+            '200': { description: 'The report. Shown only when its signature verifies against the published keys.', content: { 'text/html': {} } },
+            '500': { description: 'The report failed its signature check. The page says so and shows no figures.', content: { 'text/html': {} } },
             '404': problemResponse('No such report.'),
           },
         },

@@ -7,6 +7,7 @@
 //
 //   node scripts/check-osps-baseline.mjs
 //   node scripts/check-osps-baseline.mjs --source <checkout of ossf/security-baseline>
+//   node scripts/check-osps-baseline.mjs --page <file>     check a copy of the page (used by the tests)
 //
 // With --source it also confirms the pinned list against the baseline's own checklist file, so the
 // ids cannot drift from the version the page names.
@@ -16,7 +17,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const manifest = JSON.parse(readFileSync(join(root, 'docs/osps-baseline-l1.json'), 'utf8'));
-const page = readFileSync(join(root, 'docs/osps-baseline.md'), 'utf8');
+const pageAt = process.argv.indexOf('--page');
+const pageFile = pageAt === -1 ? join(root, 'docs/osps-baseline.md') : process.argv[pageAt + 1];
+const page = readFileSync(pageFile, 'utf8');
+// Words the page puts in code spans that are not files in this repository. Anything else in a code
+// span in an evidence cell must exist as a path, unless it is a URL or an address on the service.
+const NOT_PATHS = new Set(['main', 'pull_request', 'pull_request_target', 'contents: read', '.env']);
 const STATUSES = ['Met', 'Not applicable', 'To confirm', 'Not met'];
 const problems = [];
 let checks = 0;
@@ -37,8 +43,7 @@ for (const line of page.split('\n')) {
   check(asks.length > 0 && evidence.length > 0, `${id}: the row is incomplete`);
   for (const match of evidence.matchAll(/`([^`]+)`/g)) {
     const path = match[1];
-    // Things in backticks that are not files in this repository: URLs, workflow keywords, branch names.
-    if (/^https?:|^\/|^[a-z_]+(: [a-z]+)?$|^\.env$/.test(path)) continue;
+    if (/^https?:\/\/|^\//.test(path) || NOT_PATHS.has(path)) continue;
     check(existsSync(join(root, path)), `${id}: the evidence names ${path}, which does not exist`);
   }
 }
@@ -81,7 +86,7 @@ if (sourceAt !== -1) {
 }
 
 if (problems.length > 0) {
-  console.error(`FAILED: ${problems.length} problem(s) in docs/osps-baseline.md`);
+  console.error(`FAILED: ${problems.length} problem(s) in ${pageAt === -1 ? 'docs/osps-baseline.md' : pageFile}`);
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }

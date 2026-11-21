@@ -44,6 +44,18 @@ test('text from the result cannot break out of its table cell', () => {
   assert.equal(row, '| A \\| B | 5 / 10 | line one line two \\| img src=x code \\\\ |');
 });
 
+test('links, images, emphasis and direction controls in the result stay plain text', () => {
+  const out = run({
+    score: 5,
+    checks: [{ name: '[Click](https://example.com)', score: 5, reason: '![x](https://example.com/a.png) *bold* _it_ \u202Egnp.exe', details: ['Warn: [here](https://example.com)'] }],
+  });
+  assert.equal(out.status, 0, out.stderr);
+  const row = out.stdout.split('\n').find((l) => l.startsWith('| \\[Click'));
+  assert.equal(row, '| \\[Click\\]\\(https://example.com\\) | 5 / 10 | \\!\\[x\\]\\(https://example.com/a.png\\) \\*bold\\* \\_it\\_  gnp.exe |');
+  assert.ok(out.stdout.includes('- Warn: \\[here\\]\\(https://example.com\\)'));
+  assert.doesNotMatch(out.stdout, /[\u202a-\u202e\u2066-\u2069]/);
+});
+
 test('findings are listed for checks below 10, and capped', () => {
   const out = run({
     score: 5,

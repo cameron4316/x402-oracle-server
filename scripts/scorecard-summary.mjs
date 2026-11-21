@@ -24,14 +24,15 @@ if (!result || typeof result !== 'object' || !Array.isArray(result.checks)) {
   process.exit(1);
 }
 
-// Text from the result goes into a table cell: one line, no pipes, no markup.
+// Text from the result goes into the summary as plain text: one line, bounded, and nothing in it
+// may act as Markdown or HTML (no table breaks, links, images, emphasis or tags), nor reorder the
+// line with direction controls.
 const cell = (value) =>
   String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
-    .replace(/\\/g, '\\\\')
-    .replace(/\|/g, '\\|')
-    .replace(/[<>`]/g, '')
+    .replace(/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]+/g, ' ')
     .slice(0, 300)
+    .replace(/[<>`]/g, '')
+    .replace(/[\\|[\]()!*_]/g, '\\$&')
     .trim();
 // Scorecard uses -1 for "could not be determined".
 const score = (n) => (typeof n === 'number' && n >= 0 ? `${n} / 10` : 'not determined');

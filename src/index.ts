@@ -20,6 +20,7 @@ import { loadKeyHistory, loadSigner, publishedKeySet } from './attest/keyset.js'
 import { attest, attestBatch } from './attest/sign.js';
 import { REPORT_ID_PATTERN } from './attest/report.js';
 import { securityTxt } from './security-txt.js';
+import { REPORT_PAGE_HEADERS, reportIndexPage, reportPage } from './report-page.js';
 import { pinnedDispatcher } from './checks/reliability/pinned-fetch.js';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -201,6 +202,18 @@ app.get('/reports/:file{[a-z0-9-]+\\.json}', async (c) => {
   }
 });
 
+// The same reports as pages a person can read (free): /reports lists them, /reports/<id> shows one.
+// A page shows figures only when the report's signature verifies against the published keys, and its
+// script checks the signature again in the reader's browser (src/report-page.ts).
+app.get('/reports', async (c) => c.body(await reportIndexPage(PUBLIC_REPORTS_DIR, publishedKeys), 200, REPORT_PAGE_HEADERS));
+app.get('/reports/:id{[a-z0-9-]+}', async (c) => {
+  const id = c.req.param('id');
+  const page = await reportPage(PUBLIC_REPORTS_DIR, id, publishedKeys);
+  if (!page) return problemResponse(c, 404, `No report named ${id}`);
+  // 500 when the report's signature did not verify: the page says so and shows no figures.
+  return c.body(page.html, page.status, page.headers);
+});
+
 // --- Machine-readable contract (free, unpaid): OpenAPI 3.1 + JSON Schemas of every response shape ---
 const openApiDoc = buildOpenApi(routes as unknown as Record<string, PaidRouteLike>, {
   maxBatchTargets: MAX_BATCH_TARGETS,
@@ -353,6 +366,7 @@ GET /.well-known/x402           - machine-readable discovery document
 GET /.well-known/hosannaith-keys.json - public keys for verifying signed results
 GET /.well-known/security.txt   - where to report a security issue (RFC 9116)
 GET /reports/<id>.json          - signed, dated public reliability reports (free)
+GET /reports/<id>               - the same report as a page for people; GET /reports lists them
 GET /openapi.json               - OpenAPI 3.1 description (paid terms in each operation's x-x402)
 GET /schema/check-result.json   - JSON Schema of a reliability result
 GET /schema/batch-result.json   - JSON Schema of a batch result

@@ -193,6 +193,19 @@ export function buildOpenApi(routes: Record<string, PaidRouteLike>, opts: { maxB
           },
         },
       },
+      '/reports/{id}': {
+        get: {
+          summary: 'A signed public report as a page for people (the signed file is /reports/{id}.json)',
+          tags: ['Discovery'],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' } }],
+          responses: {
+            '200': { description: 'The report. Shown only when its signature verifies against the published keys.', content: { 'text/html': {} } },
+            '500': { description: 'The report failed its signature check. The page says so and shows no figures.', content: { 'text/html': {} } },
+            '404': problemResponse('No such report.'),
+          },
+        },
+      },
+      '/reports': freeText('List of signed public reports, as a page for people', 'text/html'),
       '/llms.txt': freeText('Agent-facing guide'),
       '/openapi.json': freeJson('This document'),
       '/schema/check-result.json': freeJson('JSON Schema of a reliability result'),

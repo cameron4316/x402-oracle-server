@@ -106,6 +106,12 @@ It is signed with the same key and scheme as results, and `"type": "hosannaith.r
 distinguishes it from a result.
 
 - Served at `https://api.hosannaith.com/reports/<id>.json`, from `public-reports/` in this repo.
+- Also shown as a page for people at `https://api.hosannaith.com/reports/<id>` (all of them are
+  listed at `/reports`). The page shows figures only if the report's signature verifies against the
+  published keys; if it does not, the page answers 500, says so, and shows none. A script on the
+  page checks the signature again in the reader's browser with Web Crypto, and hides the figures if
+  its result differs from the server's. That second check still relies on files this server sends,
+  so it does not replace verifying the file yourself as described above.
 - Endpoints whose report cards carry recorded payment requirements also get a `payment` block
   (`samples`, `acceptedNetworks`, `algorandIdForm`, `mainnetPayablePct`, `currentSdkPayablePct`).
   These cover only 402 responses recorded since 2026-11-09, are informational, and are not part of
